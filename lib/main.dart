@@ -16,10 +16,20 @@ class GridSphereApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.green,
         primaryColor: const Color(0xFF166534),
-        scaffoldBackgroundColor: const Color(0xFFF3F4F6),
+        // Use a slight off-white/grey for the scaffold to make white cards pop
+        scaffoldBackgroundColor: const Color(0xFFF1F5F9), 
         useMaterial3: true,
+        // Define a default card theme
+        // Updated to CardThemeData based on the error message for your SDK version
+        cardTheme: CardThemeData(
+          color: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+        ),
       ),
-      // Set SplashScreen as the starting home screen
       home: const SplashScreen(),
     );
   }
