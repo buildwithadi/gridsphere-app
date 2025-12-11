@@ -43,8 +43,20 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   String selectedDeviceId = ""; // Start empty
+  
+  // --- NEW: Devices List ---
+  List<dynamic> _devices = [];
+
+  // --- Field Information State ---
+  String farmerName = "--";
+  String lastOnline = "--";
+  String deviceStatus = "Offline";
+  String deviceLocation = "--";
+  
   Map<String, dynamic>? sensorData;
-  List<double> tempHistory = []; // Store 24h temp history
+  // Store 24h history for all metrics using a Map
+  Map<String, List<double>> historyData = {}; 
+  
   bool isLoading = true;
   Timer? _timer;
   int _selectedIndex = 0;
@@ -66,7 +78,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _initializeData() async {
-    await _fetchDevices();
+    await _fetchUserInfo(); // Fetch farmer name
+    await _fetchDevices();  // Fetch device ID and location
     if (selectedDeviceId.isNotEmpty) {
       await _fetchLiveData();
       await _fetchHistoryData(); // Fetch history for the graph
@@ -86,10 +99,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // --- NEW: Helper to Switch Devices ---
+  void _switchDevice(String deviceId, String location) {
+    if (selectedDeviceId == deviceId) return;
+
+    setState(() {
+      selectedDeviceId = deviceId;
+      deviceLocation = location;
+      isLoading = true; // Show loading while fetching new device data
+      sensorData = null; // Clear old data
+    });
+    
+    // Fetch data for the new device
+    _fetchLiveData();
+    _fetchHistoryData();
+  }
+
   // Helper to load mock data if API fails
   void _loadMockData() {
     debugPrint("⚠️ Loading Mock Data (Fallback)");
     final random = Random();
+    
+    // Mock Devices List
+    final mockDevices = [
+      {'d_id': '2', 'farm_name': 'Field A (Apple)', 'location': 'Himachal Pradesh'},
+      {'d_id': '3', 'farm_name': 'Field B (Cherry)', 'location': 'Kashmir Valley'},
+    ];
+
     final data = {
       "air_temp": double.parse((24.0 + random.nextDouble() * 2 - 1).toStringAsFixed(1)),
       "humidity": 65 + random.nextInt(6) - 3,
@@ -106,17 +142,68 @@ class _DashboardScreenState extends State<DashboardScreen> {
       "surface_humidity": double.parse((55.0 + random.nextDouble() * 2).toStringAsFixed(1)),
     };
 
-    // Mock history data (24 points for 24 hours)
-    List<double> mockHistory = List.generate(24, (index) => 20.0 + random.nextDouble() * 10);
+    // Mock history data generation
+    List<double> genList(double base, double range) {
+      return List.generate(24, (index) => base + (random.nextDouble() * range - range/2));
+    }
+
+    Map<String, List<double>> mockHistory = {
+      "air_temp": genList(24.0, 5.0),
+      "humidity": genList(65.0, 10.0),
+      "leaf_wetness": List.generate(24, (_) => random.nextBool() ? 1.0 : 0.0),
+      "soil_temp": genList(20.0, 2.0),
+      "soil_moisture": genList(30.0, 5.0),
+      "rainfall": genList(0.5, 1.0).map((e) => e < 0 ? 0.0 : e).toList(),
+      "light_intensity": genList(800.0, 200.0),
+      "wind": genList(10.0, 5.0),
+      "pressure": genList(1013.0, 5.0),
+      "depth_temp": genList(22.0, 2.0),
+      "depth_humidity": genList(60.0, 5.0),
+      "surface_temp": genList(26.0, 3.0),
+      "surface_humidity": genList(55.0, 5.0),
+    };
 
     if (mounted) {
       setState(() {
         sensorData = data;
-        tempHistory = mockHistory;
+        historyData = mockHistory;
         isLoading = false;
-        // If device ID failed to load, set a dummy one for UI
-        if (selectedDeviceId.isEmpty) selectedDeviceId = "2 (Demo)";
+        _devices = mockDevices; // Populate dropdown
+        
+        // Mock Field Information
+        farmerName = "Aditya Farm";
+        lastOnline = "Today, 10:30 AM";
+        deviceStatus = "Online";
+        
+        if (selectedDeviceId.isEmpty) {
+             selectedDeviceId = mockDevices[0]['d_id']!;
+             deviceLocation = mockDevices[0]['farm_name']!;
+        }
       });
+    }
+  }
+
+  // --- NEW: Fetch User Info for Farmer Name ---
+  Future<void> _fetchUserInfo() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/checkSession'),
+        headers: {
+          'Cookie': widget.sessionCookie,
+          'User-Agent': 'FlutterApp',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            farmerName = data['username']?.toString() ?? "Farmer";
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Exception fetching user info: $e");
     }
   }
 
@@ -138,11 +225,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final dynamic data = jsonDecode(response.body);
         List<dynamic> deviceList = [];
 
-        // --- FIX: Robust Parsing for List or Map ---
         if (data is List) {
           deviceList = data;
         } else if (data is Map) {
-           // Handle wrapped responses like {"data": [...]} or {"devices": [...]}
            if (data['data'] is List) {
              deviceList = data['data'];
            } else if (data['devices'] is List) {
@@ -152,8 +237,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         if (deviceList.isNotEmpty) {
            setState(() {
-             // Ensure we convert to string safely
-             selectedDeviceId = deviceList[0]['d_id'].toString();
+             // --- Update Devices List ---
+             _devices = deviceList;
+
+             var device = deviceList[0];
+             selectedDeviceId = device['d_id'].toString();
+             // Try to get location from device info if available, else fallback
+             deviceLocation = device['farm_name']?.toString() ?? device['location']?.toString() ?? "Field A";
            });
            debugPrint("✅ Device ID Found: $selectedDeviceId");
         } else {
@@ -161,7 +251,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       } else {
         debugPrint("Error fetching devices: ${response.statusCode}");
-        // We do NOT call loadMockData here immediately to allow retries or other logic
       }
     } catch (e) {
       debugPrint("Exception fetching devices: $e");
@@ -184,7 +273,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
         
-        // Handle common wrapper keys 'data' or root level
         List<dynamic> readings = [];
         if (jsonResponse is List) {
           readings = jsonResponse;
@@ -197,6 +285,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           
           if (mounted) {
             setState(() {
+              // --- Update Field Information ---
+              lastOnline = reading['timestamp']?.toString() ?? "Unknown";
+              deviceStatus = "Online"; 
+              
               sensorData = {
                 "air_temp": double.tryParse(reading['temp'].toString()) ?? 0.0,
                 "humidity": double.tryParse(reading['humidity'].toString()) ?? 0.0,
@@ -215,6 +307,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               isLoading = false;
             });
           }
+        } else {
+             // No readings might mean offline or new device
+             if (mounted) setState(() => deviceStatus = "Offline / No Data");
         }
       } else {
         debugPrint("Error fetching live data: ${response.statusCode}");
@@ -224,12 +319,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // --- New function to fetch historical data for graphs ---
   Future<void> _fetchHistoryData() async {
     if (selectedDeviceId.isEmpty || selectedDeviceId.contains("Demo")) return;
 
     try {
-      // Assuming 'daily' range gives enough points for a 24h curve
       final response = await http.get(
         Uri.parse('$_baseUrl/devices/$selectedDeviceId/history?range=daily'),
         headers: {
@@ -250,18 +343,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
 
         if (readings.isNotEmpty) {
-          // Extract temperature readings for the chart
-          // Take last 24 points or interpolate if fewer
-          List<double> temps = readings.map<double>((r) => double.tryParse(r['temp'].toString()) ?? 0.0).toList();
+          List<double> extractList(String key) {
+            return readings.map<double>((r) {
+              return double.tryParse(r[key].toString()) ?? 0.0;
+            }).toList();
+          }
+
+          Map<String, List<double>> newHistory = {};
           
-          // Ensure we have data points, reverse if needed based on API order (usually newest first)
-          if (temps.isNotEmpty) {
-             // If API returns newest first, reverse for the graph (oldest -> newest)
-             temps = temps.reversed.toList(); 
+          newHistory['air_temp'] = extractList('temp');
+          newHistory['humidity'] = extractList('humidity');
+          newHistory['leaf_wetness'] = extractList('leafwetness'); 
+          newHistory['soil_temp'] = extractList('depth_temp'); 
+          newHistory['soil_moisture'] = extractList('surface_humidity'); 
+          newHistory['rainfall'] = extractList('rainfall');
+          newHistory['light_intensity'] = extractList('light_intensity');
+          newHistory['wind'] = extractList('wind_speed');
+          newHistory['pressure'] = extractList('pressure');
+          newHistory['depth_temp'] = extractList('depth_temp');
+          newHistory['depth_humidity'] = extractList('depth_humidity');
+          newHistory['surface_temp'] = extractList('surface_temp');
+          newHistory['surface_humidity'] = extractList('surface_humidity');
+
+          if (newHistory['air_temp']!.isNotEmpty) {
+             newHistory.forEach((key, list) {
+               newHistory[key] = list.reversed.toList();
+             });
              
              if (mounted) {
                setState(() {
-                 tempHistory = temps;
+                 historyData = newHistory;
                });
              }
           }
@@ -338,7 +449,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 24),
-                            _buildSensorInfoBox(),
+                            _buildFieldInfoBox(),
                             const SizedBox(height: 24),
                             
                             Text(
@@ -365,7 +476,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // --- Widgets (Header, Grid, Cards) ---
 
-  Widget _buildSensorInfoBox() {
+  Widget _buildFieldInfoBox() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -391,11 +502,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: const Color(0xFFE8F5E9),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(LucideIcons.radio, size: 18, color: Color(0xFF166534)),
+                child: const Icon(LucideIcons.sprout, size: 18, color: Color(0xFF166534)),
               ),
               const SizedBox(width: 10),
               Text(
-                "Sensor Device Information",
+                "Field Information", 
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -412,11 +523,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildInfoRow("Device ID:", selectedDeviceId), // Dynamic ID
+                    _buildInfoRow("Device ID:", selectedDeviceId), 
                     const SizedBox(height: 12),
-                    _buildInfoRow("Last Seen:", "Just now"), 
+                    _buildInfoRow("Farmer Name:", farmerName), 
                     const SizedBox(height: 12),
-                    _buildInfoRow("Battery:", "85%"), 
+                    _buildInfoRow("Location:", deviceLocation), 
                   ],
                 ),
               ),
@@ -424,11 +535,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildStatusRow("Status:", "Online"),
+                    _buildStatusRow("Status:", deviceStatus), 
                     const SizedBox(height: 12),
-                    _buildInfoRow("Location:", "Field A"),
-                    const SizedBox(height: 12),
-                    _buildInfoRow("Signal:", "Excellent"),
+                    _buildInfoRow("Last Online:", lastOnline), 
                   ],
                 ),
               ),
@@ -451,12 +560,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Text(
           value,
           style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF374151)),
+          overflow: TextOverflow.ellipsis, // Handle long text
+          maxLines: 2,
         ),
       ],
     );
   }
 
   Widget _buildStatusRow(String label, String value) {
+    final bool isOnline = value.toLowerCase().contains("online");
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -467,12 +579,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(height: 4),
         Row(
           children: [
-            const Icon(Icons.circle, size: 8, color: Color(0xFF22C55E)),
+            Icon(Icons.circle, size: 8, color: isOnline ? const Color(0xFF22C55E) : Colors.red),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
                 value,
-                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF15803D)),
+                style: GoogleFonts.inter(
+                  fontSize: 13, 
+                  fontWeight: FontWeight.w600, 
+                  color: isOnline ? const Color(0xFF15803D) : Colors.red
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -496,7 +612,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: Colors.white.withOpacity(0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.public, size: 24, color: Colors.white),
+                child: Image.asset(
+                  'assets/logo.png', 
+                  width: 24,
+                  height: 24,
+                  // If the image fails to load (missing file), show the Icon instead
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(
+                      Icons.public, // Represents 'Grid Sphere'
+                      size: 24,
+                      color: Colors.white,
+                    );
+                  },
+                ),
               ),
               const SizedBox(width: 12),
               Column(
@@ -506,10 +634,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     "Grid Sphere Pvt. Ltd.",
                     style: GoogleFonts.inter(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  Text(
-                    "AgriTech",
-                    style: GoogleFonts.inter(color: Colors.white70, fontSize: 12),
-                  ),
+                  
+                  // --- NEW: Device Selector Toggle ---
+                  // If we have devices, show a dropdown trigger. If not, showing simplified text.
+                  if (_devices.isNotEmpty)
+                    PopupMenuButton<String>(
+                      onSelected: (String id) {
+                         // Find the device object
+                         final device = _devices.firstWhere((d) => d['d_id'].toString() == id);
+                         // Get Name to display or fallback to location/id
+                         String name = device['farm_name']?.toString() ?? "Field ${device['d_id']}";
+                         _switchDevice(id, name);
+                      },
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      itemBuilder: (BuildContext context) {
+                        return _devices.map((device) {
+                          return PopupMenuItem<String>(
+                            value: device['d_id'].toString(),
+                            child: Text(
+                              device['farm_name']?.toString() ?? "Device ${device['d_id']}",
+                              style: GoogleFonts.inter(color: Colors.black87),
+                            ),
+                          );
+                        }).toList();
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              deviceLocation, // Reusing location variable for display name temporarily
+                              style: GoogleFonts.inter(color: Colors.white70, fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down, color: Colors.white70, size: 18),
+                        ],
+                      ),
+                    )
+                  else
+                    Text(
+                      "AgriTech",
+                      style: GoogleFonts.inter(color: Colors.white70, fontSize: 12),
+                    ),
                 ],
               ),
             ],
@@ -546,7 +714,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
-      childAspectRatio: 0.9, 
+      // --- FIX: Adjusted childAspectRatio to give cards more height ---
+      childAspectRatio: 0.85, 
       children: [
         _ConditionCard(
           title: "Air Temp",
@@ -554,8 +723,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: LucideIcons.thermometer,
           iconBg: const Color(0xFFE8F5E9),
           iconColor: const Color(0xFF2E7D32),
-          // --- UPDATED: Pass dynamic historical data ---
-          child: _MiniLineChart(color: const Color(0xFF2E7D32), dataPoints: tempHistory),
+          child: _MiniLineChart(color: const Color(0xFF2E7D32), dataPoints: historyData['air_temp'] ?? []),
           onTap: () {
             Navigator.push(
               context,
@@ -569,8 +737,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: LucideIcons.droplets,
           iconBg: const Color(0xFFE3F2FD),
           iconColor: const Color(0xFF0288D1),
-          // For humidity, we don't have history yet, passing empty list will default to smooth curve
-          child: _MiniLineChart(color: const Color(0xFF0288D1), dataPoints: []),
+          child: _MiniLineChart(color: const Color(0xFF0288D1), dataPoints: historyData['humidity'] ?? []),
           onTap: () {
             Navigator.push(
               context,
@@ -582,14 +749,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           title: "Leaf",
           customContent: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center, // Center vertically
             children: [
               Text("Leaf Wetness", style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF374151))),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4), // Reduced spacing
               Row(
                 children: [
                   Text("${sensorData?['leaf_wetness']}", style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF111827))),
                   const SizedBox(width: 8),
-                  const Icon(Icons.check_circle, color: Color(0xFF22C55E), size: 24),
+                  const Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 24),
                 ],
               )
             ],
@@ -597,6 +765,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: LucideIcons.leaf,
           iconBg: const Color(0xFFDCFCE7),
           iconColor: const Color(0xFF15803D),
+          child: _MiniLineChart(color: const Color(0xFF15803D), dataPoints: historyData['leaf_wetness'] ?? []),
         ),
         _ConditionCard(
           title: "Soil Temp\n(10cm)",
@@ -604,6 +773,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: Icons.device_thermostat, 
           iconBg: const Color(0xFFFEF3C7),
           iconColor: const Color(0xFFD97706),
+          child: _MiniLineChart(color: const Color(0xFFD97706), dataPoints: historyData['soil_temp'] ?? []),
         ),
         _ConditionCard(
           title: "Soil\nMoisture",
@@ -612,6 +782,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: LucideIcons.waves,
           iconBg: const Color(0xFFE0E7FF),
           iconColor: const Color(0xFF4F46E5),
+          child: _MiniLineChart(color: const Color(0xFF4F46E5), dataPoints: historyData['soil_moisture'] ?? []),
         ),
         _ConditionCard(
           title: "Today's\nRainfall",
@@ -620,6 +791,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: LucideIcons.cloudRain,
           iconBg: const Color(0xFFE0F2FE),
           iconColor: const Color(0xFF0EA5E9),
+          child: _MiniLineChart(color: const Color(0xFF0EA5E9), dataPoints: historyData['rainfall'] ?? []),
         ),
         _ConditionCard(
           title: "Light\nIntensity",
@@ -627,6 +799,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: LucideIcons.sun,
           iconBg: const Color(0xFFFFFDE7),
           iconColor: const Color(0xFFFBC02D),
+          child: _MiniLineChart(color: const Color(0xFFFBC02D), dataPoints: historyData['light_intensity'] ?? []),
         ),
         _ConditionCard(
           title: "Wind",
@@ -634,6 +807,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: LucideIcons.wind,
           iconBg: const Color(0xFFE0F7FA),
           iconColor: const Color(0xFF0097A7),
+          child: _MiniLineChart(color: const Color(0xFF0097A7), dataPoints: historyData['wind'] ?? []),
         ),
         _ConditionCard(
           title: "Pressure",
@@ -641,6 +815,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: LucideIcons.gauge,
           iconBg: const Color(0xFFF3E5F5),
           iconColor: const Color(0xFF7B1FA2),
+          child: _MiniLineChart(color: const Color(0xFF7B1FA2), dataPoints: historyData['pressure'] ?? []),
         ),
         _ConditionCard(
           title: "Depth Temp\n(10cm)",
@@ -648,6 +823,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: Icons.device_thermostat, 
           iconBg: const Color(0xFFE8F5E9),
           iconColor: const Color(0xFF2E7D32),
+          child: _MiniLineChart(color: const Color(0xFF2E7D32), dataPoints: historyData['depth_temp'] ?? []),
         ),
         _ConditionCard(
           title: "Depth Hum\n(10cm)",
@@ -655,6 +831,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: LucideIcons.droplet, 
           iconBg: const Color(0xFFE1F5FE),
           iconColor: const Color(0xFF0288D1),
+          child: _MiniLineChart(color: const Color(0xFF0288D1), dataPoints: historyData['depth_humidity'] ?? []),
         ),
         _ConditionCard(
           title: "Surf Temp",
@@ -662,6 +839,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: Icons.thermostat,
           iconBg: const Color(0xFFFFEBEE),
           iconColor: const Color(0xFFD32F2F),
+          child: _MiniLineChart(color: const Color(0xFFD32F2F), dataPoints: historyData['surface_temp'] ?? []),
         ),
         _ConditionCard(
           title: "Surf Hum",
@@ -669,6 +847,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           icon: LucideIcons.waves,
           iconBg: const Color(0xFFEFEBE9),
           iconColor: const Color(0xFF5D4037),
+          child: _MiniLineChart(color: const Color(0xFF5D4037), dataPoints: historyData['surface_humidity'] ?? []),
         ),
       ],
     );
