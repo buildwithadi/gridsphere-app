@@ -18,6 +18,8 @@ import '../detailed_screens/depth_humidity_details_screen.dart';
 import '../detailed_screens/surface_temperature_details_screen.dart';
 import '../detailed_screens/surface_humidity_details_screen.dart';
 import 'alerts_screen.dart';
+import 'protection_screen.dart';
+import 'soil_screen.dart'; // Added Import
 
 class GoogleFonts {
   static TextStyle inter({
@@ -94,8 +96,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _initializeData() async {
-    await _fetchUserInfo(); // Fetch farmer name
-    await _fetchDevices(); // Fetch device ID and location
+    // Optimization: _fetchDevices now handles both devices and farmer info
+    await _fetchDevices(); 
+    
     if (selectedDeviceId.isNotEmpty) {
       await _fetchLiveData();
       await _fetchHistoryData(); // Fetch history for the graph
@@ -221,30 +224,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // --- Fetch User Info for Farmer Name ---
-  Future<void> _fetchUserInfo() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/checkSession'),
-        headers: {
-          'Cookie': widget.sessionCookie,
-          'User-Agent': 'FlutterApp',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (mounted) {
-          setState(() {
-            farmerName = data['username']?.toString() ?? "Farmer";
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint("Exception fetching user info: $e");
-    }
-  }
-
   Future<void> _fetchDevices() async {
     try {
       final response = await http.get(
@@ -280,10 +259,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             var device = deviceList[0];
             selectedDeviceId = device['d_id'].toString();
+            
             // Try to get location from device info if available, else fallback
-            deviceLocation = device['farm_name']?.toString() ??
-                device['location']?.toString() ??
-                "Field A";
+            deviceLocation = device['address']?.toString() ?? "Field A";
+            
+            // --- EXTRACT FARMER NAME HERE (Optimized) ---
+            farmerName = device["farm_name"]?.toString() ?? "Farmer";
           });
           debugPrint("✅ Device ID Found: $selectedDeviceId");
         } else {
@@ -489,7 +470,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onTap: (index) {
           if (index == 2) return;
           setState(() => _selectedIndex = index);
-          if (index == 4) {
+          
+          if (index == 1) { // Protection Tab
+             Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => ProtectionScreen(
+                sessionCookie: widget.sessionCookie,
+                deviceId: selectedDeviceId,
+              )),
+            ).then((_) => setState(() => _selectedIndex = 0));
+          } else if (index == 3) { // Soil Tab (Added Logic)
+             Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => SoilScreen(
+                sessionCookie: widget.sessionCookie,
+                deviceId: selectedDeviceId,
+                sensorData: sensorData, // Pass current data
+              )),
+            ).then((_) => setState(() => _selectedIndex = 0));
+          } else if (index == 4) { // Alerts Tab
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const AlertsScreen()),
@@ -940,7 +939,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // 4. Wind
         _ConditionCard(
             title: "Wind",
-            value: "${sensorData?['wind']} m/s",
+            value: "${sensorData?['wind']} km/h",
             icon: LucideIcons.wind,
             iconBg: const Color(0xFFE0F7FA),
             iconColor: const Color(0xFF0097A7),

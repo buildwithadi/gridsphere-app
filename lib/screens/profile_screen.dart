@@ -45,7 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _fetchUserData() async {
     try {
-      // Fetch Session info (often contains user details)
+      // 1. Fetch Session info (Using same logic as Dashboard)
       final sessionResponse = await http.get(
         Uri.parse('$_baseUrl/checkSession'),
         headers: {
@@ -58,11 +58,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       String username = "Farmer";
       String email = "--";
       String mobile = "--";
-      String address = "India"; // Default
+      String address = "India"; 
 
       if (sessionResponse.statusCode == 200) {
         final sessionData = jsonDecode(sessionResponse.body);
-        // Adjust these keys based on your actual API response structure for checkSession
+        
+        // Use 'username' from session data, similar to Dashboard logic
         if (sessionData['user_id'] != null) userId = sessionData['user_id'].toString();
         if (sessionData['username'] != null) username = sessionData['username'].toString();
         
@@ -86,7 +87,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (userId == "Loading...") userId = "admin"; 
       }
 
-      // Fetch Devices count
+      // 2. Fetch Devices count (Using getDevices endpoint as in Dashboard)
       final devicesResponse = await http.get(
         Uri.parse('$_baseUrl/getDevices'),
         headers: {
@@ -100,9 +101,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final devicesData = jsonDecode(devicesResponse.body);
         if (devicesData is List) {
           deviceCount = devicesData.length;
+          
+          // Optimization: If address is still default, try to get from first device
+          if (address == "India" && devicesData.isNotEmpty) {
+             var firstDevice = devicesData[0];
+             address = firstDevice['address']?.toString() ?? 
+                       firstDevice['location']?.toString() ?? 
+                       "India";
+          }
+          
         } else if (devicesData is Map && devicesData.containsKey('data')) {
            // Handle if wrapped in 'data'
-           if (devicesData['data'] is List) deviceCount = (devicesData['data'] as List).length;
+           if (devicesData['data'] is List) {
+             var list = devicesData['data'] as List;
+             deviceCount = list.length;
+             
+             if (address == "India" && list.isNotEmpty) {
+                var firstDevice = list[0];
+                address = firstDevice['address']?.toString() ?? 
+                          firstDevice['location']?.toString() ?? 
+                          "India";
+             }
+           }
         }
       }
 
