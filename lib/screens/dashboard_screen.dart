@@ -492,9 +492,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               )),
             ).then((_) => setState(() => _selectedIndex = 0));
           } else if (index == 4) { // Alerts Tab
+            // --- FIXED: Required named parameter 'sessionCookie' must be provided ---
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const AlertsScreen()),
+              MaterialPageRoute(builder: (context) => AlertsScreen(
+                sessionCookie: widget.sessionCookie,
+                deviceId: selectedDeviceId,
+              )),
             ).then((_) => setState(() => _selectedIndex = 0));
           }
         },
@@ -932,7 +936,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             }),
         _ConditionCard(
             title: "Wind",
-            value: "${sensorData?['wind']} km/h",
+            // --- UPDATED: Always display wind speed in m/s (km/h / 3.6) ---
+            value: "${((sensorData?['wind'] ?? 0.0) / 3.6).toStringAsFixed(1)} m/s",
             icon: LucideIcons.wind,
             iconBg: const Color(0xFFE0F7FA),
             iconColor: const Color(0xFF0097A7),

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:http/http.dart' as http; // Added http
-import 'dart:convert'; // Added json
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'chat_screen.dart';
 import 'alerts_screen.dart';
-// Detailed screens imports removed as they are no longer linked in the new design
-import 'dart:math'; // For fallback mock data
-import 'package:intl/intl.dart'; // For formatting time
+import 'dashboard_screen.dart';
+import 'protection_screen.dart';
+import 'dart:math';
+import 'package:intl/intl.dart';
 
 class GoogleFonts {
   static TextStyle inter({
@@ -29,8 +30,8 @@ class GoogleFonts {
 
 class SoilScreen extends StatefulWidget {
   final String sessionCookie;
-  final String deviceId; // To fetch data if needed
-  final Map<String, dynamic>? sensorData; // To display current values immediately
+  final String deviceId; 
+  final Map<String, dynamic>? sensorData; 
   final double latitude;
   final double longitude;
 
@@ -49,9 +50,8 @@ class SoilScreen extends StatefulWidget {
 
 class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  int _selectedIndex = 3; // 3 corresponds to "Soil" in BottomNavBar
+  int _selectedIndex = 3; // Corresponds to "Soil"
 
-  // Mock data for spray timing
   List<Map<String, dynamic>> _sprayForecast = [];
   bool _isLoadingForecast = true;
 
@@ -59,7 +59,6 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    // Use API if lat/lon available, else fallback
     if (widget.latitude != 0.0 && widget.longitude != 0.0) {
       _fetchForecastData();
     } else {
@@ -69,8 +68,6 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
 
   Future<void> _fetchForecastData() async {
     final apiKey = "371b716c25a9e70d9b96b6dc52443a7a";
-    // cnt=8 gives 24 hours (8 * 3 hours) from the API.
-    // We will use these 3-hour blocks directly.
     final url = Uri.parse("https://api.openweathermap.org/data/2.5/forecast?lat=${widget.latitude}&lon=${widget.longitude}&cnt=8&appid=$apiKey&units=metric"); 
 
     try {
@@ -84,11 +81,8 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
         
         for (var item in list) {
            DateTime time = DateTime.fromMillisecondsSinceEpoch(item['dt'] * 1000);
-           
            double temp = (item['main']['temp'] as num).toDouble();
            double humidity = (item['main']['humidity'] as num).toDouble();
-           
-           // Wind speed from API is in m/s (metric)
            double windSpeedMps = (item['wind']['speed'] as num).toDouble();
            double windSpeedKph = windSpeedMps * 3.6; 
            
@@ -97,11 +91,8 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
              weatherDesc = item['weather'][0]['description'].toString().toLowerCase();
            }
            
-           // Logic: No Spray if Rain or Wind > 3 m/s
            bool isRaining = weatherDesc.contains('rain') || weatherDesc.contains('drizzle') || weatherDesc.contains('storm');
-           bool tooWindy = windSpeedMps > 3.0; // > 3 m/s
-           
-           // Modified Logic: Removed humidity check (> 40)
+           bool tooWindy = windSpeedMps > 3.0; 
            bool canSpray = !isRaining && !tooWindy && (temp < 28); 
            
            String reason = "";
@@ -113,7 +104,7 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
              "time": time,
              "temp": temp,
              "humidity": humidity,
-             "wind": windSpeedKph, // Display in kph usually better for users, but logic used m/s
+             "wind": windSpeedKph,
              "windMps": windSpeedMps,
              "canSpray": canSpray,
              "reason": reason,
@@ -128,37 +119,30 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
           });
         }
       } else {
-        debugPrint("Weather API Error: ${response.statusCode}");
         _generateMockSprayData(); 
       }
     } catch (e) {
-      debugPrint("Weather API Exception: $e");
       _generateMockSprayData();
     }
   }
 
   void _generateMockSprayData() {
-    // This is now a fallback only if API fails completely
     final random = Random();
     DateTime now = DateTime.now();
-    // Round up to nearest 3 hours
     int hour = now.hour;
     int nextHour = (hour ~/ 3 + 1) * 3; 
-    // Handle day overflow if needed, but simple addition works
     DateTime startTime = DateTime(now.year, now.month, now.day, nextHour, 0);
     if (startTime.isBefore(now)) startTime = startTime.add(const Duration(hours: 3));
     
     List<Map<String, dynamic>> mockData = [];
-    for (int i = 0; i < 8; i++) { // 8 blocks of 3 hours = 24 hours
+    for (int i = 0; i < 8; i++) {
       DateTime time = startTime.add(Duration(hours: i * 3));
       double temp = 20 + random.nextDouble() * 10; 
       double humidity = 40 + random.nextDouble() * 40; 
-      double windMps = random.nextDouble() * 5; // 0-5 m/s
+      double windMps = random.nextDouble() * 5;
       double windKph = windMps * 3.6;
-      
-      bool isRaining = random.nextDouble() > 0.8; // 20% chance rain
+      bool isRaining = random.nextDouble() > 0.8;
       bool tooWindy = windMps > 3.0;
-      
       bool canSpray = !isRaining && !tooWindy && (temp < 28);
       String reason = isRaining ? "Rain" : (tooWindy ? "Windy" : "");
 
@@ -191,7 +175,7 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF166534), // Brand Green
+      backgroundColor: const Color(0xFF166534), 
       appBar: AppBar(
         backgroundColor: const Color(0xFF166534),
         elevation: 0,
@@ -286,14 +270,30 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
         selectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12),
         unselectedLabelStyle: GoogleFonts.inter(fontSize: 12),
         onTap: (index) {
-          if (index == 2) return; // Dummy item
+          if (index == 2 || index == _selectedIndex) return; 
           
           if (index == 0) {
-            Navigator.pop(context); // Go back to Dashboard
-          } else if (index == 4) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => DashboardScreen(sessionCookie: widget.sessionCookie)),
+              (route) => false,
+            );
+          } else if (index == 1) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const AlertsScreen()),
+              MaterialPageRoute(builder: (context) => ProtectionScreen(
+                sessionCookie: widget.sessionCookie,
+                deviceId: widget.deviceId,
+              )),
+            ).then((_) => setState(() => _selectedIndex = 3));
+          } else if (index == 4) {
+            // FIXED: Passing sessionCookie and deviceId to resolve required parameter error
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => AlertsScreen(
+                sessionCookie: widget.sessionCookie,
+                deviceId: widget.deviceId,
+              )),
             ).then((_) => setState(() => _selectedIndex = 3));
           } else {
              setState(() => _selectedIndex = index);
@@ -319,9 +319,7 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
           child: TabBarView(
             controller: _tabController,
             children: [
-              // --- Spray Timing Tab ---
               _buildSprayTimingContent(),
-              // --- Soil Parameters Tab ---
               _buildSoilParametersContent(),
             ],
           ),
@@ -361,7 +359,6 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
                child: CircularProgressIndicator(color: Color(0xFF166534)),
              ))
           else 
-            // List view of blocks one after another
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -384,8 +381,8 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
     bool canSpray = slot['canSpray'];
     String reason = slot['reason'] ?? "";
     
-    Color statusColor = canSpray ? const Color(0xFF22C55E) : const Color(0xFFEF4444); // Green or Red
-    Color bgColor = canSpray ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2); // Light Green or Light Red
+    Color statusColor = canSpray ? const Color(0xFF22C55E) : const Color(0xFFEF4444); 
+    Color bgColor = canSpray ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2); 
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -403,7 +400,6 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
       ),
       child: Row(
         children: [
-          // Time
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -432,8 +428,6 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
             ),
           ),
           const SizedBox(width: 16),
-          
-          // Metrics
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -444,10 +438,7 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
               ],
             ),
           ),
-          
           const SizedBox(width: 12),
-          
-          // Signal Indicator
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -526,29 +517,28 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
             ),
           ),
           const SizedBox(height: 16),
-          // Additional Soil Parameters with Dummy Data
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: 1.5, // Slightly wider for text
+            childAspectRatio: 1.5, 
             children: [
               _buildSimpleCard("pH Soil", "6.5", LucideIcons.testTube),
               _buildSimpleCard("EC Soil", "0.8 dS/m", LucideIcons.zap),
               _buildSimpleCard("Organic Carbon", "0.75 %", LucideIcons.leaf),
               _buildSimpleCard("N Available", "180 Kg/ha", LucideIcons.sprout),
-              _buildSimpleCard("P Available", "22 Kg/ha", LucideIcons.aperture), // P icon placeholder
-              _buildSimpleCard("K Available", "210 Kg/ha", LucideIcons.atom), // K icon placeholder
-              _buildSimpleCard("Calcium", "4.2 cmol/Kg", LucideIcons.bone), // Calcium icon placeholder
-              _buildSimpleCard("Magnesium", "1.8 cmol/Kg", LucideIcons.mountainSnow), // Mg icon placeholder
-              _buildSimpleCard("S Available", "15 ppm", LucideIcons.cloudFog), // Sulfur icon placeholder
-              _buildSimpleCard("Iron", "4.5 mg/Kg", LucideIcons.anchor), // Iron icon placeholder
-              _buildSimpleCard("Manganese", "3.2 mg/Kg", LucideIcons.gem), // Manganese icon placeholder
-              _buildSimpleCard("Copper", "0.8 mg/Kg", LucideIcons.coins), // Copper icon placeholder
-              _buildSimpleCard("Zinc", "1.2 mg/Kg", LucideIcons.shield), // Zinc icon placeholder
-              _buildSimpleCard("Boron", "0.5 mg/Kg", LucideIcons.flower), // Boron icon placeholder
+              _buildSimpleCard("P Available", "22 Kg/ha", LucideIcons.aperture), 
+              _buildSimpleCard("K Available", "210 Kg/ha", LucideIcons.atom), 
+              _buildSimpleCard("Calcium", "4.2 cmol/Kg", LucideIcons.bone), 
+              _buildSimpleCard("Magnesium", "1.8 cmol/Kg", LucideIcons.mountainSnow), 
+              _buildSimpleCard("S Available", "15 ppm", LucideIcons.cloudFog), 
+              _buildSimpleCard("Iron", "4.5 mg/Kg", LucideIcons.anchor), 
+              _buildSimpleCard("Manganese", "3.2 mg/Kg", LucideIcons.gem), 
+              _buildSimpleCard("Copper", "0.8 mg/Kg", LucideIcons.coins), 
+              _buildSimpleCard("Zinc", "1.2 mg/Kg", LucideIcons.shield), 
+              _buildSimpleCard("Boron", "0.5 mg/Kg", LucideIcons.flower), 
             ],
           ),
           const SizedBox(height: 40),
@@ -591,8 +581,8 @@ class _SoilScreenState extends State<SoilScreen> with SingleTickerProviderStateM
                 child: Text(
                   title,
                   style: GoogleFonts.inter(
-                    fontSize: 13, // Increased size
-                    color: Colors.grey[700], // Darker text
+                    fontSize: 13, 
+                    color: Colors.grey[700], 
                     fontWeight: FontWeight.w600,
                   ),
                   maxLines: 1,

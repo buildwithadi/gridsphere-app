@@ -291,9 +291,9 @@ class _TemperatureDetailsScreenState extends State<TemperatureDetailsScreen> {
               ),
               child: Row(
                 children: [
-                  _buildTab("24 Hrs", "24h"),
-                  _buildTab("7 Days", "7d"),
-                  _buildTab("30 Days", "30d"),
+                  _buildTab("Day", "24h"),
+                  _buildTab("Week", "7d"),
+                  _buildTab("Month", "30d"),
                 ],
               ),
             ),
@@ -507,7 +507,8 @@ class _DetailedChartPainter extends CustomPainter {
         } else if (range == '7d') {
            labelText = DateFormat('E').format(labelTime); 
         } else {
-           labelText = DateFormat('MM/dd').format(labelTime); 
+           // Month format changed to DD/MM
+           labelText = DateFormat('dd/MM').format(labelTime); 
         }
 
         final textSpan = TextSpan(text: labelText, style: textStyle);

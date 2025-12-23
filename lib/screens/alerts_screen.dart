@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'dashboard_screen.dart';
+import 'protection_screen.dart';
+import 'soil_screen.dart';
+import 'chat_screen.dart';
 
-// Fallback GoogleFonts class
+// Fallback GoogleFonts class to maintain consistency across the app
 class GoogleFonts {
   static TextStyle inter({
     double? fontSize,
@@ -19,13 +23,27 @@ class GoogleFonts {
   }
 }
 
-class AlertsScreen extends StatelessWidget {
-  const AlertsScreen({super.key});
+class AlertsScreen extends StatefulWidget {
+  final String sessionCookie;
+  final String deviceId;
+
+  const AlertsScreen({
+    super.key,
+    required this.sessionCookie,
+    this.deviceId = "",
+  });
+
+  @override
+  State<AlertsScreen> createState() => _AlertsScreenState();
+}
+
+class _AlertsScreenState extends State<AlertsScreen> {
+  int _selectedIndex = 4; // 4 corresponds to "Alerts" in the BottomNavBar
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF166534), // Dark Green Background
+      backgroundColor: const Color(0xFF166534), // Brand Dark Green
       appBar: AppBar(
         backgroundColor: const Color(0xFF166534),
         elevation: 0,
@@ -43,6 +61,73 @@ class AlertsScreen extends StatelessWidget {
         ),
         centerTitle: true,
       ),
+
+      // --- Standard Robot FAB ---
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ChatScreen()),
+          );
+        },
+        backgroundColor: const Color(0xFF166534),
+        elevation: 4.0,
+        shape: const CircleBorder(),
+        child: const Icon(LucideIcons.bot, color: Colors.white, size: 28),
+      ),
+
+      // --- Standard Bottom Navigation Bar ---
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: const Color(0xFF166534),
+        unselectedItemColor: Colors.grey,
+        showUnselectedLabels: true,
+        selectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12),
+        unselectedLabelStyle: GoogleFonts.inter(fontSize: 12),
+        onTap: (index) {
+          if (index == 2 || index == _selectedIndex) return;
+
+          if (index == 0) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                builder: (context) => DashboardScreen(sessionCookie: widget.sessionCookie),
+              ),
+              (route) => false,
+            );
+          } else if (index == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProtectionScreen(
+                  sessionCookie: widget.sessionCookie,
+                  deviceId: widget.deviceId,
+                ),
+              ),
+            );
+          } else if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => SoilScreen(
+                  sessionCookie: widget.sessionCookie,
+                  deviceId: widget.deviceId,
+                ),
+              ),
+            );
+          }
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
+          BottomNavigationBarItem(icon: Icon(LucideIcons.shieldCheck), label: "Protection"),
+          BottomNavigationBarItem(icon: SizedBox(height: 24), label: ""), // Dummy for FAB
+          BottomNavigationBarItem(icon: Icon(LucideIcons.layers), label: "Soil"),
+          BottomNavigationBarItem(icon: Icon(Icons.notifications), label: "Alerts"),
+        ],
+      ),
+
       body: Column(
         children: [
           const SizedBox(height: 10),
@@ -89,6 +174,7 @@ class AlertsScreen extends StatelessWidget {
                           color: Colors.grey[600],
                         ),
                       ),
+                      const SizedBox(height: 60), // Extra space to account for FAB overlay
                     ],
                   ),
                 ),

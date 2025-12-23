@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'chat_screen.dart';
 import 'alerts_screen.dart';
+import 'dashboard_screen.dart';
+import 'soil_screen.dart';
 
 class GoogleFonts {
   static TextStyle inter({
@@ -41,7 +43,7 @@ class ProtectionScreen extends StatefulWidget {
 
 class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  int _selectedIndex = 1; 
+  int _selectedIndex = 1; // Index 1 is Protection
   final String _baseUrl = "https://gridsphere.in/station/api";
 
   // Data for Overall Display
@@ -71,7 +73,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
     "Spider Mites",
     "San Jose Scale"
   ];
-  Map<String, dynamic> _pestRisks = {}; // Changed to dynamic for full object storage
+  Map<String, dynamic> _pestRisks = {}; 
 
   @override
   void initState() {
@@ -188,7 +190,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
     Map<String, dynamic> blackRot = _calculateBlackRot(temp, wetnessHours);
     Map<String, dynamic> bitterRot = _calculateBitterRot(temp, wetnessHours);
 
-    // Mock Degree Days
     double degreeDays = (temp > 10) ? (temp - 10) * 15 : 50; 
 
     Map<String, dynamic> codlingMoth = _getCodlingMothRisk(degreeDays);
@@ -253,7 +254,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
     _calculateRisks(temp, wetnessHours, humidity);
   }
 
-  // ... [All Logic Functions (Fungus & Pest) remain unchanged] ...
   Map<String, dynamic> _calculateAppleScab(double temp, double wetnessHours) {
     if (temp < 6) return {'value': 0, 'status': "Low"}; 
     double? requiredHours;
@@ -430,14 +430,33 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
         selectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12),
         unselectedLabelStyle: GoogleFonts.inter(fontSize: 12),
         onTap: (index) {
-          if (index == 2) return; 
+          if (index == 2 || index == _selectedIndex) return; 
           
           if (index == 0) {
-            Navigator.pop(context); 
-          } else if (index == 4) {
+            // Navigate back to Dashboard
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => DashboardScreen(sessionCookie: widget.sessionCookie)),
+              (route) => false,
+            );
+          } else if (index == 3) {
+            // Navigate to Soil Screen
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const AlertsScreen()),
+              MaterialPageRoute(builder: (context) => SoilScreen(
+                sessionCookie: widget.sessionCookie,
+                deviceId: widget.deviceId,
+              )),
+            ).then((_) => setState(() => _selectedIndex = 1));
+          } else if (index == 4) {
+            // Navigate to Alerts Screen
+            // FIXED: Passing sessionCookie and deviceId to AlertsScreen
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => AlertsScreen(
+                sessionCookie: widget.sessionCookie,
+                deviceId: widget.deviceId,
+              )),
             ).then((_) => setState(() => _selectedIndex = 1));
           } else {
              setState(() => _selectedIndex = index);
@@ -465,9 +484,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
             : TabBarView(
             controller: _tabController,
             children: [
-              // --- Fungus Tab ---
               _buildFungusContent(), 
-              // --- Pest Tab ---
               _buildPestContent(),
             ],
           ),
@@ -476,7 +493,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
     );
   }
 
-  // --- Specific Builder for Fungus Tab ---
   Widget _buildFungusContent() {
     Color riskColor = _getRiskColor(fungusRisk);
     Color bgColor = riskColor.withOpacity(0.05);
@@ -487,7 +503,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
         children: [
           const SizedBox(height: 10),
           
-          // --- Main Overall Risk Card ---
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -601,7 +616,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
           
           const SizedBox(height: 20),
 
-          // --- Specific Disease List ---
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -628,7 +642,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
                 ),
                 const SizedBox(height: 16),
                 ..._fungiNames.map((name) {
-                  // Get Risk Object {value, status}
                   var riskObj = _fungiRisks[name];
                   double val = 0;
                   String status = "Low";
@@ -645,7 +658,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Name and Percentage
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -668,7 +680,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
                           ],
                         ),
                         const SizedBox(height: 8),
-                        // Custom Bar
                         Stack(
                           children: [
                             Container(
@@ -701,7 +712,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
 
           const SizedBox(height: 24),
 
-          // --- AI Insight ---
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
@@ -756,7 +766,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
     );
   }
 
-  // --- Specific Builder for Pest Tab ---
   Widget _buildPestContent() {
     Color riskColor = _getRiskColor(pestRisk);
     Color bgColor = riskColor.withOpacity(0.05);
@@ -767,7 +776,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
         children: [
           const SizedBox(height: 10),
           
-          // --- Main Overall Activity Card ---
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -881,7 +889,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
           
           const SizedBox(height: 20),
 
-          // --- Specific Pest List ---
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -908,7 +915,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
                 ),
                 const SizedBox(height: 16),
                 ..._pestNames.map((name) {
-                  // Get Risk Object {value, status}
                   var riskObj = _pestRisks[name];
                   double val = 0;
                   String status = "Low";
@@ -925,7 +931,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Name and Percentage
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -948,7 +953,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
                           ],
                         ),
                         const SizedBox(height: 8),
-                        // Custom Bar
                         Stack(
                           children: [
                             Container(
@@ -981,7 +985,6 @@ class _ProtectionScreenState extends State<ProtectionScreen> with SingleTickerPr
 
           const SizedBox(height: 24),
 
-          // --- AI Insight ---
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
