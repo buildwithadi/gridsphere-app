@@ -8,6 +8,7 @@ import '../session_manager/session_manager.dart'; // Import SessionManager
 import '../widgets/custom_bottom_nav_bar.dart'; // Import CustomBottomNavBar
 import '../widgets/home_back_button.dart';
 import '../widgets/home_pop_scope.dart'; // Import HomePopScope
+import 'package:gsense_app/api_constants.dart'; // Import global API constants
 
 class GoogleFonts {
   static TextStyle inter({
@@ -43,7 +44,9 @@ class ProtectionScreen extends StatefulWidget {
 class _ProtectionScreenState extends State<ProtectionScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final String _baseUrl = "https://gridsphere.in/station/api";
+
+  // Use the global URL from ApiConstants instead of a hardcoded string
+  final String _baseUrl = ApiConstants.baseUrl;
 
   String fungusRisk = "Low";
   double fungusChance = 0.0;
@@ -77,22 +80,22 @@ class _ProtectionScreenState extends State<ProtectionScreen>
     _tabController = TabController(length: 2, vsync: this);
 
     // Check session validity before fetching
-    final cookie = SessionManager().sessionCookie;
-    if (cookie.isNotEmpty) {
+    final token = SessionManager().accessToken;
+    if (token.isNotEmpty) {
       _fetchLiveAndCalculateRisks();
     } else {
       debugPrint(
-          "⚠️ No session cookie found in ProtectionScreen. Loading mock data.");
+          "⚠️ No access token found in ProtectionScreen. Loading mock data.");
       _generateMockData();
     }
   }
 
   Future<void> _fetchLiveAndCalculateRisks() async {
     String targetDeviceId = widget.deviceId;
-    String sessionCookie = SessionManager().sessionCookie; // Get from Manager
+    String token = SessionManager().accessToken; // Get JWT from Manager
 
     if (targetDeviceId.isEmpty) {
-      await _fetchDefaultDevice(sessionCookie);
+      await _fetchDefaultDevice(token);
       targetDeviceId = _tempDeviceId;
     }
 
@@ -105,7 +108,7 @@ class _ProtectionScreenState extends State<ProtectionScreen>
       final response = await http.get(
         Uri.parse('$_baseUrl/live-data/$targetDeviceId'),
         headers: {
-          'Cookie': sessionCookie,
+          'Authorization': 'Bearer $token',
           'User-Agent': 'FlutterApp',
           'Accept': 'application/json',
         },
@@ -114,9 +117,10 @@ class _ProtectionScreenState extends State<ProtectionScreen>
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
         List<dynamic> readings = [];
-        if (jsonResponse is List)
+        if (jsonResponse is List) {
           readings = jsonResponse;
-        else if (jsonResponse['data'] is List) readings = jsonResponse['data'];
+        } else if (jsonResponse['data'] is List)
+          readings = jsonResponse['data'];
 
         if (readings.isNotEmpty) {
           final reading = readings[0];
@@ -124,7 +128,7 @@ class _ProtectionScreenState extends State<ProtectionScreen>
           double humidity =
               double.tryParse(reading['humidity'].toString()) ?? 0.0;
           double wetnessHours =
-              await _calculateWetnessDuration(targetDeviceId, sessionCookie);
+              await _calculateWetnessDuration(targetDeviceId, token);
           _calculateRisks(temp, wetnessHours, humidity);
         } else {
           _generateMockData();
@@ -138,12 +142,12 @@ class _ProtectionScreenState extends State<ProtectionScreen>
     }
   }
 
-  Future<double> _calculateWetnessDuration(String id, String cookie) async {
+  Future<double> _calculateWetnessDuration(String id, String token) async {
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/devices/$id/history?range=daily'),
         headers: {
-          'Cookie': cookie,
+          'Authorization': 'Bearer $token',
           'User-Agent': 'FlutterApp',
         },
       );
@@ -151,9 +155,9 @@ class _ProtectionScreenState extends State<ProtectionScreen>
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
         List<dynamic> list = [];
-        if (jsonResponse is List)
+        if (jsonResponse is List) {
           list = jsonResponse;
-        else if (jsonResponse['data'] is List) list = jsonResponse['data'];
+        } else if (jsonResponse['data'] is List) list = jsonResponse['data'];
 
         int wetCount = 0;
         for (var r in list) {
@@ -173,11 +177,11 @@ class _ProtectionScreenState extends State<ProtectionScreen>
   }
 
   String _tempDeviceId = "";
-  Future<void> _fetchDefaultDevice(String cookie) async {
+  Future<void> _fetchDefaultDevice(String token) async {
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/getDevices'),
-        headers: {'Cookie': cookie, 'User-Agent': 'FlutterApp'},
+        headers: {'Authorization': 'Bearer $token', 'User-Agent': 'FlutterApp'},
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -292,91 +296,101 @@ class _ProtectionScreenState extends State<ProtectionScreen>
   }
 
   Map<String, dynamic> _calculateAlternaria(double temp, double wetnessHours) {
-    if (temp >= 25 && temp <= 30 && wetnessHours >= 5.5)
+    if (temp >= 25 && temp <= 30 && wetnessHours >= 5.5) {
       return {'value': 80, 'status': "High"};
-    if (temp >= 20 && temp <= 32 && wetnessHours >= 4)
+    }
+    if (temp >= 20 && temp <= 32 && wetnessHours >= 4) {
       return {'value': 50, 'status': "Medium"};
+    }
     return {'value': 0, 'status': "Low"};
   }
 
   Map<String, dynamic> _calculateMarssonina(double temp, double wetnessHours) {
-    if (temp >= 20 && temp <= 25 && wetnessHours >= 24)
+    if (temp >= 20 && temp <= 25 && wetnessHours >= 24) {
       return {'value': 90, 'status': "High"};
-    if (temp >= 16 && temp <= 28 && wetnessHours >= 10)
+    }
+    if (temp >= 16 && temp <= 28 && wetnessHours >= 10) {
       return {'value': 60, 'status': "Medium"};
+    }
     return {'value': 0, 'status': "Low"};
   }
 
   Map<String, dynamic> _calculatePowderyMildew(double temp, double humidity) {
-    if (temp < 10 || temp > 25 || humidity < 70)
+    if (temp < 10 || temp > 25 || humidity < 70) {
       return {'value': 0, 'status': "Low"};
+    }
     bool optimal = (temp >= 19 && temp <= 22 && humidity > 75);
     int risk = optimal ? 90 : 60;
     return {'value': risk, 'status': risk >= 70 ? "High" : "Medium"};
   }
 
   Map<String, dynamic> _calculateCedarRust(double temp, double wetnessHours) {
-    if (temp >= 13 && temp <= 24 && wetnessHours >= 4)
+    if (temp >= 13 && temp <= 24 && wetnessHours >= 4) {
       return {'value': 75, 'status': "High"};
-    if (temp >= 10 && temp <= 26 && wetnessHours >= 2)
+    }
+    if (temp >= 10 && temp <= 26 && wetnessHours >= 2) {
       return {'value': 50, 'status': "Medium"};
+    }
     return {'value': 0, 'status': "Low"};
   }
 
   Map<String, dynamic> _calculateBlackRot(double temp, double wetnessHours) {
-    if (temp < 20 || temp > 35 || wetnessHours < 4)
+    if (temp < 20 || temp > 35 || wetnessHours < 4) {
       return {'value': 0, 'status': "Low"};
+    }
     bool optimal = (temp >= 26 && temp <= 32 && wetnessHours >= 6);
     int risk = optimal ? 85 : 60;
     return {'value': risk, 'status': risk >= 70 ? "High" : "Medium"};
   }
 
   Map<String, dynamic> _calculateBitterRot(double temp, double wetnessHours) {
-    if (temp >= 26 && temp <= 32 && wetnessHours >= 5)
+    if (temp >= 26 && temp <= 32 && wetnessHours >= 5) {
       return {'value': 80, 'status': "High"};
-    if (temp >= 20 && temp <= 35 && wetnessHours >= 3)
+    }
+    if (temp >= 20 && temp <= 35 && wetnessHours >= 3) {
       return {'value': 50, 'status': "Medium"};
+    }
     return {'value': 0, 'status': "Low"};
   }
 
   Map<String, dynamic> _getCodlingMothRisk(double degreeDays) {
     Map<String, dynamic> risk = {'value': 0, 'status': "Low"};
-    if (degreeDays > 50 && degreeDays <= 250)
+    if (degreeDays > 50 && degreeDays <= 250) {
       risk = {'value': 40, 'status': "Medium"};
-    else if (degreeDays > 250) risk = {'value': 85, 'status': "High"};
+    } else if (degreeDays > 250) risk = {'value': 85, 'status': "High"};
     return risk;
   }
 
   Map<String, dynamic> _getAphidRisk(double temp, double humidity) {
     Map<String, dynamic> risk = {'value': 10, 'status': "Low"};
-    if (temp > 18 && temp < 25 && humidity < 70)
+    if (temp > 18 && temp < 25 && humidity < 70) {
       risk = {'value': 90, 'status': "High"};
-    else if (temp > 15 && temp < 28) risk = {'value': 50, 'status': "Medium"};
+    } else if (temp > 15 && temp < 28) risk = {'value': 50, 'status': "Medium"};
     return risk;
   }
 
   Map<String, dynamic> _getAppleMaggotRisk(double degreeDays) {
     Map<String, dynamic> risk = {'value': 0, 'status': "Low"};
-    if (degreeDays > 900)
+    if (degreeDays > 900) {
       risk = {'value': 80, 'status': "High"};
-    else if (degreeDays > 700) risk = {'value': 40, 'status': "Medium"};
+    } else if (degreeDays > 700) risk = {'value': 40, 'status': "Medium"};
     return risk;
   }
 
   Map<String, dynamic> _getSpiderMiteRisk(double temp, double humidity) {
     Map<String, dynamic> risk = {'value': 10, 'status': "Low"};
-    if (temp > 29 && humidity < 60)
+    if (temp > 29 && humidity < 60) {
       risk = {'value': 95, 'status': "High"};
-    else if (temp > 25 && humidity < 70)
+    } else if (temp > 25 && humidity < 70)
       risk = {'value': 60, 'status': "Medium"};
     return risk;
   }
 
   Map<String, dynamic> _getSanJoseScaleRisk(double degreeDays) {
     Map<String, dynamic> risk = {'value': 0, 'status': "Low"};
-    if (degreeDays > 400 && degreeDays < 600)
+    if (degreeDays > 400 && degreeDays < 600) {
       risk = {'value': 90, 'status': "High"};
-    else if (degreeDays > 250) risk = {'value': 30, 'status': "Medium"};
+    } else if (degreeDays > 250) risk = {'value': 30, 'status': "Medium"};
     return risk;
   }
 
@@ -706,7 +720,7 @@ class _ProtectionScreenState extends State<ProtectionScreen>
                       ],
                     ),
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),
@@ -715,8 +729,8 @@ class _ProtectionScreenState extends State<ProtectionScreen>
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [const Color(0xFFEFF6FF), const Color(0xFFDBEAFE)],
+              gradient: const LinearGradient(
+                colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -975,7 +989,7 @@ class _ProtectionScreenState extends State<ProtectionScreen>
                       ],
                     ),
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),
@@ -984,8 +998,8 @@ class _ProtectionScreenState extends State<ProtectionScreen>
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [const Color(0xFFEFF6FF), const Color(0xFFDBEAFE)],
+              gradient: const LinearGradient(
+                colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),

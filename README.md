@@ -1,4 +1,4 @@
-# grid_sphere_app
+# G Sense
 
 A new Flutter project.
 

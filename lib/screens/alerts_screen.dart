@@ -51,7 +51,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
   final Map<String, TextEditingController> _maxControllers = {};
 
   // Configuration Data Source
-  Map<String, dynamic> _alertConfigs = {
+  final Map<String, dynamic> _alertConfigs = {
     'temp': {'enabled': false, 'min': 10.0, 'max': 35.0},
     'humidity': {'enabled': false, 'min': 30.0, 'max': 80.0},
     'surface_humidity': {'enabled': false, 'min': 20.0, 'max': 60.0},
@@ -359,7 +359,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   const SizedBox(height: 12),
                   ..._sensorDisplayNames.map((sensor) {
                     return _buildSensorCard(sensor);
-                  }).toList(),
+                  }),
                   const SizedBox(height: 80), // Space for FAB
                 ],
               ),
@@ -431,9 +431,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
             ),
           ),
           if (isEnabled) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: const Divider(height: 1),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Divider(height: 1),
             ),
             Padding(
               padding: const EdgeInsets.all(16.0),

@@ -183,8 +183,9 @@ class _CementEmissionScreenState extends State<CementEmissionScreen>
 
   void _runSuperTabAlgorithms() {
     // --- TAB 3: DYNAMICS ---
-    if (windSpeed > 4 && pm25 > 80) windEffect = "Wind Lifting Dust";
-    else if (windSpeed > 4 && pm25 < 50) windEffect = "Wind Clearing Pollution";
+    if (windSpeed > 4 && pm25 > 80) {
+      windEffect = "Wind Lifting Dust";
+    } else if (windSpeed > 4 && pm25 < 50) windEffect = "Wind Clearing Pollution";
     else if (windSpeed < 2) windEffect = "Calm Accumulation";
     else windEffect = "Neutral Transport";
 
@@ -197,13 +198,17 @@ class _CementEmissionScreenState extends State<CementEmissionScreen>
 
     humiditySuppression = (100 - humidity) * 0.5;
 
-    if (pressure < 1002) pressureTrend = "Dropping (Instability Likely)";
-    else pressureTrend = "Stable System";
+    if (pressure < 1002) {
+      pressureTrend = "Dropping (Instability Likely)";
+    } else {
+      pressureTrend = "Stable System";
+    }
 
     solarDryingEffect = sunlight > 5000 ? 1.4 : 0.9;
 
-    if (windDirection >= 30 && windDirection <= 80) dominantSector = "Crusher (30°-80°)";
-    else if (windDirection >= 120 && windDirection <= 160) dominantSector = "Kiln (120°-160°)";
+    if (windDirection >= 30 && windDirection <= 80) {
+      dominantSector = "Crusher (30°-80°)";
+    } else if (windDirection >= 120 && windDirection <= 160) dominantSector = "Kiln (120°-160°)";
     else if (windDirection >= 200 && windDirection <= 240) dominantSector = "Loading (200°-240°)";
     else dominantSector = "Undefined Sector";
 
@@ -219,7 +224,9 @@ class _CementEmissionScreenState extends State<CementEmissionScreen>
     complianceRisk = pm6hAvg > (60 * 0.7) ? "High Risk" : "Low Risk";
 
     double sumExcess = 0;
-    for(var pm in hourlyPmLast24) if(pm > 60) sumExcess += (pm - 60);
+    for(var pm in hourlyPmLast24) {
+      if(pm > 60) sumExcess += (pm - 60);
+    }
     exceedanceSeverity = sumExcess;
 
     double mean = pm24hAvg;

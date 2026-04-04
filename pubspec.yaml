@@ -1,5 +1,5 @@
-name: grid_sphere_app
-description: "AI-powered advisory system for apple orchard management by Grid Sphere."
+name: gsense_app
+description: "AI-powered advisory system for fields."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none"
@@ -40,9 +40,7 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/logo.png"
   adaptive_icon_background: "#166534" # Brand Green background for Android adaptive icons
-  adaptive_icon_foreground: "assets/mainlogo.png"
 
 flutter:
   # Included Material Design icons
@@ -51,7 +49,6 @@ flutter:
   # Asset registration for the logo and potential images
   assets:
     - assets/
-    - assets/logo.png
 
   # Custom font registration (if needed in future)
   # fonts:

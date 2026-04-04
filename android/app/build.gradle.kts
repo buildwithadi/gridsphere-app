@@ -22,7 +22,7 @@ val hasReleaseKeystore = keystorePropertiesFile.exists() &&
     keystoreProperties["storePassword"] != null
 
 android {
-    namespace = "in.gridsphere.grid_sphere_app"
+    namespace = "in.gsense.gsense_app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "29.0.13846066"
 
@@ -41,7 +41,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "in.gridsphere.grid_sphere_app"
+        applicationId = "in.gsense.gsense_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

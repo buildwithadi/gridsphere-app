@@ -9,6 +9,7 @@ import 'chat_screen.dart';
 import 'generic_detail_screen.dart';
 import '../session_manager/session_manager.dart'; // Import SessionManager
 import '../widgets/custom_bottom_nav_bar.dart'; // Import CustomBottomNavBar
+import 'package:gsense_app/api_constants.dart';
 
 class GoogleFonts {
   static TextStyle inter({
@@ -50,7 +51,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, List<double>> historyData = {};
   bool isLoading = true;
   Timer? _timer;
-  final String _baseUrl = "https://gridsphere.in/station/api";
+
+  // Use the global URL from ApiConstants instead of a hardcoded string
+  final String _baseUrl = ApiConstants.baseUrl;
 
   // Coordinates used locally, also synched to SessionManager
   double _currentLatitude = 0.0;
@@ -60,7 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     debugPrint(
-        "Dashboard initialized with Cookie: ${SessionManager().sessionCookie}");
+        "Dashboard initialized with Token: ${SessionManager().accessToken}");
 
     // Load initial location from SessionManager if available
     _currentLatitude = SessionManager().latitude;
@@ -87,10 +90,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("Connection failed. Showing Offline Data."),
+          const SnackBar(
+            content: Text("Connection failed. Showing Offline Data."),
             backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 3),
+            duration: Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -225,7 +228,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final response = await http.get(
         Uri.parse('$_baseUrl/getDevices'),
         headers: {
-          'Cookie': SessionManager().sessionCookie,
+          'Authorization': 'Bearer ${SessionManager().accessToken}',
           'User-Agent': 'FlutterApp',
           'Accept': 'application/json',
         },
@@ -277,7 +280,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final response = await http.get(
         Uri.parse('$_baseUrl/live-data/$selectedDeviceId'),
         headers: {
-          'Cookie': SessionManager().sessionCookie,
+          'Authorization': 'Bearer ${SessionManager().accessToken}',
           'User-Agent': 'FlutterApp',
           'Accept': 'application/json',
         },
@@ -373,7 +376,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final response = await http.get(
         Uri.parse('$_baseUrl/devices/$selectedDeviceId/history?range=daily'),
         headers: {
-          'Cookie': SessionManager().sessionCookie,
+          'Authorization': 'Bearer ${SessionManager().accessToken}',
           'User-Agent': 'FlutterApp',
           'Accept': 'application/json',
         },
@@ -531,7 +534,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Data is stale. Please contact the Grid Sphere service team.",
+                  "Data is stale. Please contact the G Sense service team.",
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: Colors.red.shade700,
@@ -691,25 +694,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: Colors.white.withOpacity(0.15),
                   shape: BoxShape.circle,
                 ),
-                child: Image.asset(
-                  'assets/logo.png',
-                  width: 24,
-                  height: 24,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Icon(
-                      Icons.public,
-                      size: 24,
-                      color: Colors.white,
-                    );
-                  },
-                ),
               ),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Grid Sphere",
+                    "G Sense",
                     style: GoogleFonts.inter(
                         color: Colors.white,
                         fontSize: 16,
@@ -771,7 +762,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => ProfileScreen(
-                      sessionCookie: SessionManager().sessionCookie),
+                      // We pass the accessToken. You may need to rename this parameter
+                      // in ProfileScreen.dart to 'token' depending on how you update it.
+                      sessionCookie: SessionManager().accessToken),
                 ),
               ).then((_) {
                 if (mounted) setState(() {});

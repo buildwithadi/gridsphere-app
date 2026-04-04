@@ -685,8 +685,8 @@ class _ChemicalDustSpreadScreenState extends State<ChemicalDustSpreadScreen>
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-            colors: [const Color(0xFFEFF6FF), const Color(0xFFDBEAFE)],
+        gradient: const LinearGradient(
+            colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(20),

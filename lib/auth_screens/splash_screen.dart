@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../session_manager/session_manager.dart';
 import 'package:google_fonts/google_fonts.dart'; // The real package
+import 'package:gsense_app/api_constants.dart';
 
 // --- FIX: Use 'hide GoogleFonts' to ignore the local helpers in these files ---
 import 'login_screen.dart' hide GoogleFonts;
@@ -21,7 +22,9 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _opacity;
-  final String _baseUrl = "https://gridsphere.in/station/api";
+
+  // Use the global URL from ApiConstants instead of a hardcoded string
+  final String _baseUrl = ApiConstants.baseUrl;
 
   @override
   void initState() {
@@ -37,24 +40,24 @@ class _SplashScreenState extends State<SplashScreen>
     // Wait for animation/branding
     await Future.delayed(const Duration(seconds: 3));
 
-    // Check for saved cookie
+    // Check for saved JWT token
     final prefs = await SharedPreferences.getInstance();
-    final String? sessionCookie = prefs.getString('session_cookie');
+    final String? token = prefs.getString('jwt_token');
 
     if (mounted) {
-      if (sessionCookie != null && sessionCookie.isNotEmpty) {
+      if (token != null && token.isNotEmpty) {
         // --- Set session in Singleton ---
-        SessionManager().setSessionCookie(sessionCookie);
+        SessionManager().setAccessToken(token);
 
-        // Fetch devices first to get the active device ID
-        await _fetchDevicesAndIndustry(sessionCookie);
+        // Fetch devices first to get the active device ID using the JWT
+        await _fetchDevicesAndIndustry(token);
 
-        // Cookie found -> Go to Dashboard
+        // Token found -> Go to Dashboard
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const DashboardScreen()),
         );
       } else {
-        // No cookie -> Go to Login
+        // No token -> Go to Login
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
         );
@@ -62,12 +65,13 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
-  Future<void> _fetchDevicesAndIndustry(String cookie) async {
+  // Updated to use JWT Token in the Authorization header
+  Future<void> _fetchDevicesAndIndustry(String token) async {
     try {
       final devicesResponse = await http.get(
         Uri.parse('$_baseUrl/getDevices'),
         headers: {
-          'Cookie': cookie,
+          'Authorization': 'Bearer $token',
           'User-Agent': 'FlutterApp',
         },
       );
@@ -90,7 +94,7 @@ class _SplashScreenState extends State<SplashScreen>
 
           if (deviceId.isNotEmpty) {
             SessionManager().setDeviceId(deviceId);
-            await _fetchIndustryType(cookie, deviceId);
+            await _fetchIndustryType(token, deviceId);
           } else {
             // Fallback to local storage if no device is found
             await SessionManager().loadRole();
@@ -115,12 +119,13 @@ class _SplashScreenState extends State<SplashScreen>
     return 'chemical'; // 0 or others
   }
 
-  Future<void> _fetchIndustryType(String cookie, String deviceId) async {
+  // Updated to use JWT Token in the Authorization header
+  Future<void> _fetchIndustryType(String token, String deviceId) async {
     try {
       final industryResponse = await http.get(
         Uri.parse('$_baseUrl/devices/$deviceId/industry'),
         headers: {
-          'Cookie': cookie,
+          'Authorization': 'Bearer $token',
           'User-Agent': 'FlutterApp',
         },
       );
@@ -178,17 +183,12 @@ class _SplashScreenState extends State<SplashScreen>
                     color: Colors.white.withOpacity(0.15),
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white24, width: 2)),
-                child: Image.asset('assets/logo.png',
-                    width: 64,
-                    height: 64,
-                    errorBuilder: (c, e, s) => const Icon(Icons.public,
-                        size: 64, color: Colors.white)),
               ),
               const SizedBox(height: 30),
 
               // --- Title with Bruno Ace SC ---
               Text(
-                "Grid Sphere",
+                "G Sense",
                 textAlign: TextAlign.center,
                 style: GoogleFonts.brunoAceSc(
                   fontSize: 24,

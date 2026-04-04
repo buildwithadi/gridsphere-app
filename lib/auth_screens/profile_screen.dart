@@ -368,7 +368,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       Text(
-                        "Grid Sphere Pvt. Ltd.",
+                        "G Sense",
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           color: Colors.white70,
@@ -621,7 +621,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               );
-            }).toList(),
+            }),
             const SizedBox(height: 10),
           ],
         ),

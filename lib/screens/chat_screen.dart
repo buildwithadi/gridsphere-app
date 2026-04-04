@@ -62,7 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
       {
         'from': 'ai',
         'text':
-            "Namaste! 剌 I'm your Kisan AI companion from Grid Sphere. 言\n\nI'm here to help you keep a close eye on your farm. I have your real-time data for Device ${widget.deviceId} ready! \n\nHow is your field doing today? Would you like me to check the soil health or recent rainfall for you?"
+            "Namaste! 剌 I'm your Kisan AI companion from G Sense. 言\n\nI'm here to help you keep a close eye on your farm. I have your real-time data for Device ${widget.deviceId} ready! \n\nHow is your field doing today? Would you like me to check the soil health or recent rainfall for you?"
       }
     ];
   }
@@ -280,9 +280,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
                   bottomLeft:
-                      isUser ? const Radius.circular(20) : Radius.circular(4),
+                      isUser ? const Radius.circular(20) : const Radius.circular(4),
                   bottomRight:
-                      isUser ? Radius.circular(4) : const Radius.circular(20),
+                      isUser ? const Radius.circular(4) : const Radius.circular(20),
                 ),
                 boxShadow: [
                   BoxShadow(

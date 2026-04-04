@@ -7,6 +7,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 import '../session_manager/session_manager.dart';
 import '../widgets/home_back_button.dart';
 import '../widgets/home_pop_scope.dart'; // Import HomePopScope
+import 'package:gsense_app/api_constants.dart'; // Connecting with the api_constant.dart file
 
 class GoogleFonts {
   static TextStyle inter({
@@ -83,14 +84,16 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
     if (range == '7d') apiRange = 'weekly';
     if (range == '30d') apiRange = 'monthly';
 
+    // Using ApiConstants for the base URL instead of hardcoded string
     final url = Uri.parse(
-        "https://gridsphere.in/station/api/devices/${widget.deviceId}/history?range=$apiRange");
+        "${ApiConstants.baseUrl}/devices/${widget.deviceId}/history?range=$apiRange");
 
     try {
       final response = await http.get(
         url,
         headers: {
-          'Cookie': SessionManager().sessionCookie, // Use SessionManager
+          'Authorization':
+              'Bearer ${SessionManager().accessToken}', // Updated to use JWT access token
           'User-Agent': 'FlutterApp',
           'Accept': 'application/json',
         },
@@ -116,9 +119,9 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
 
             // Handle different key names in history API if they differ from sensorKey
             if (rawVal == null) {
-              if (widget.sensorKey == 'air_temp')
+              if (widget.sensorKey == 'air_temp') {
                 rawVal = r['temp'];
-              else if (widget.sensorKey == 'soil_moisture')
+              } else if (widget.sensorKey == 'soil_moisture')
                 rawVal = r['surface_humidity'];
               else if (widget.sensorKey == 'soil_temp')
                 rawVal = r['depth_temp'];

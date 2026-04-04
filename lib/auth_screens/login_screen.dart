@@ -3,8 +3,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/dashboard_screen.dart';
-import 'register_ui_screen.dart'; // Import Register Screen
-import '../session_manager/session_manager.dart'; // Ensure SessionManager is imported
+import 'register_ui_screen.dart';
+import '../session_manager/session_manager.dart';
+import 'package:gsense_app/api_constants.dart';
 
 class GoogleFonts {
   static TextStyle inter({
@@ -37,42 +38,17 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
 
-  final String _baseUrl = "https://gridsphere.in/station/api";
+  // Use the global URL from ApiConstants instead of a hardcoded string
+  final String _baseUrl = ApiConstants.baseUrl;
   final String _userAgent = "FlutterApp";
-  final Map<String, String> _cookieJar = {};
 
-  void _updateCookieJar(String? rawCookies) {
-    if (rawCookies == null || rawCookies.isEmpty) return;
-    final regex = RegExp(r'([a-zA-Z0-9_-]+)=([^;]+)');
-    final matches = regex.allMatches(rawCookies);
-    final Set<String> ignoreKeys = {
-      'expires',
-      'max-age',
-      'path',
-      'domain',
-      'secure',
-      'httponly',
-      'samesite'
-    };
-    for (final match in matches) {
-      String key = match.group(1)?.trim() ?? "";
-      String value = match.group(2)?.trim() ?? "";
-      if (key.isNotEmpty && !ignoreKeys.contains(key.toLowerCase())) {
-        _cookieJar[key] = value;
-      }
-    }
-  }
-
-  String _getCookieHeader() {
-    return _cookieJar.entries.map((e) => "${e.key}=${e.value}").join("; ");
-  }
-
-  Future<void> _fetchDevicesAndIndustry(String cookie) async {
+  // Updated to use JWT Token in the Authorization header
+  Future<void> _fetchDevicesAndIndustry(String token) async {
     try {
       final devicesResponse = await http.get(
         Uri.parse('$_baseUrl/getDevices'),
         headers: {
-          'Cookie': cookie,
+          'Authorization': 'Bearer $token',
           'User-Agent': _userAgent,
         },
       );
@@ -95,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           if (deviceId.isNotEmpty) {
             SessionManager().setDeviceId(deviceId);
-            await _fetchIndustryType(cookie, deviceId);
+            await _fetchIndustryType(token, deviceId);
           } else {
             await SessionManager().loadRole();
           }
@@ -116,15 +92,16 @@ class _LoginScreenState extends State<LoginScreen> {
   String _mapValueToRole(int val) {
     if (val == 1) return 'agriculture';
     if (val == 2) return 'cement';
-    return 'chemical'; // 0 or others
+    return 'chemical';
   }
 
-  Future<void> _fetchIndustryType(String cookie, String deviceId) async {
+  // Updated to use JWT Token in the Authorization header
+  Future<void> _fetchIndustryType(String token, String deviceId) async {
     try {
       final industryResponse = await http.get(
         Uri.parse('$_baseUrl/devices/$deviceId/industry'),
         headers: {
-          'Cookie': cookie,
+          'Authorization': 'Bearer $token',
           'User-Agent': _userAgent,
         },
       );
@@ -133,13 +110,11 @@ class _LoginScreenState extends State<LoginScreen> {
         final indData = jsonDecode(industryResponse.body);
 
         if (indData['status'] == true && indData['data'] != null) {
-          // Extract mapped integer (0, 1, 2)
           int indValue = int.tryParse(
                   indData['data']['industry_value']?.toString() ?? '1') ??
               1;
           String fetchedRole = _mapValueToRole(indValue);
 
-          // Save the fetched role
           SessionManager().setRole(fetchedRole);
           SessionManager().setIndustryValue(indValue);
           await SessionManager().saveRole(fetchedRole, industryValue: indValue);
@@ -162,6 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // Re-written to support JWT and application/x-www-form-urlencoded
   Future<void> _handleLogin() async {
     FocusScope.of(context).unfocus();
 
@@ -169,72 +145,61 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = true);
 
       try {
-        final csrfUrl = Uri.parse('$_baseUrl/getCSRF');
-        final csrfResponse = await http.get(
-          csrfUrl,
-          headers: {'User-Agent': _userAgent},
+        final loginUrl = Uri.parse('$_baseUrl/login');
+
+        final loginResponse = await http.post(
+          loginUrl,
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": _userAgent,
+          },
+          body: {
+            "grant_type": "",
+            "username": _idController.text.trim(),
+            "password": _passwordController.text.trim(),
+            "scope": "",
+            "client_id": "",
+            "client_secret": "",
+          },
         );
 
-        if (csrfResponse.statusCode == 200) {
-          final csrfData = jsonDecode(csrfResponse.body);
-          final String csrfName = csrfData['csrf_name'];
-          final String csrfValue = csrfData['csrf_token'];
+        if (loginResponse.statusCode == 200) {
+          final loginData = jsonDecode(loginResponse.body);
 
-          _updateCookieJar(csrfResponse.headers['set-cookie']);
+          // Typically OAuth2/JWT endpoints return 'access_token'
+          final String token =
+              loginData['access_token'] ?? loginData['token'] ?? '';
 
-          if (_cookieJar.isNotEmpty) {
-            final loginUrl = Uri.parse('$_baseUrl/login');
+          if (token.isNotEmpty) {
+            debugPrint("✅ Login Success! JWT Token received.");
 
-            final loginResponse = await http.post(
-              loginUrl,
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Cookie": _getCookieHeader(),
-                "User-Agent": _userAgent,
-              },
-              body: {
-                "username": _idController.text.trim(),
-                "password": _passwordController.text.trim(),
-                csrfName: csrfValue,
-              },
-            );
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('jwt_token', token);
 
-            if (loginResponse.statusCode == 200) {
-              final loginData = jsonDecode(loginResponse.body);
+            // Initialize SessionManager with JWT
+            SessionManager().setAccessToken(token);
 
-              if (loginData['status'] == true ||
-                  loginData['status'] == 'success') {
-                _updateCookieJar(loginResponse.headers['set-cookie']);
-                final String finalCookies = _getCookieHeader();
-                debugPrint("✅ Login Success! Clean Cookies: $finalCookies");
+            // Fetch initial location logic and industry type using the new token
+            await _fetchDevicesAndIndustry(token);
 
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setString('session_cookie', finalCookies);
-
-                // Initialize SessionManager
-                SessionManager().setSessionCookie(finalCookies);
-
-                // Fetch initial location logic and industry type
-                await _fetchDevicesAndIndustry(finalCookies);
-
-                if (mounted) {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (context) => const DashboardScreen(),
-                    ),
-                  );
-                }
-              } else {
-                _showError(loginData['message'] ?? 'Login failed');
-              }
-            } else {
-              _showError('Login Error: ${loginResponse.statusCode}');
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => const DashboardScreen(),
+                ),
+              );
             }
           } else {
-            _showError('Session initialization failed (No Cookie)');
+            // Token was missing from the 200 OK response
+            _showError(loginData['message'] ??
+                'Authentication failed: No token provided');
           }
         } else {
-          _showError('Server Error: ${csrfResponse.statusCode}');
+          // Handle non-200 responses (e.g. 401 Unauthorized)
+          final errorData = jsonDecode(loginResponse.body);
+          _showError(errorData['detail'] ??
+              errorData['message'] ??
+              'Login Error: ${loginResponse.statusCode}');
         }
       } catch (e) {
         _showError('Connection failed. Check internet.');
@@ -417,8 +382,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                           fontWeight: FontWeight.bold)),
                             ),
                           ),
-
-                          // --- UPDATED: Registration Link ---
                           const SizedBox(height: 20),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,

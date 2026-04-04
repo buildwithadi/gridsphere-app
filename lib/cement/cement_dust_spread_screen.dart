@@ -211,8 +211,9 @@ class _CementDustSpreadScreenState extends State<CementDustSpreadScreen>
     double rawScore = (0.55 * pmAdjusted) + (0.25 * vocSeverity) + (0.1 * drynessIndex) + (0.1 * stabilityRisk);
     airScore = min(rawScore, 100.0);
 
-    if (airScore <= 25) airRiskCategory = "Clean Air";
-    else if (airScore <= 50) airRiskCategory = "Manageable";
+    if (airScore <= 25) {
+      airRiskCategory = "Clean Air";
+    } else if (airScore <= 50) airRiskCategory = "Manageable";
     else if (airScore <= 70) airRiskCategory = "Elevated";
     else if (airScore <= 85) airRiskCategory = "High Risk";
     else airRiskCategory = "Severe Condition";
@@ -226,8 +227,9 @@ class _CementDustSpreadScreenState extends State<CementDustSpreadScreen>
         : pm25;
     double momentum = pm30minAvg == 0 ? 0 : (pm25 - pm30minAvg) / pm30minAvg;
 
-    if (momentum > 0.15) pollutionMomentum = "Rapidly Rising";
-    else if (momentum > 0.05) pollutionMomentum = "Slowly Increasing";
+    if (momentum > 0.15) {
+      pollutionMomentum = "Rapidly Rising";
+    } else if (momentum > 0.05) pollutionMomentum = "Slowly Increasing";
     else if (momentum > -0.05) pollutionMomentum = "Stable";
     else pollutionMomentum = "Improving Fast";
 
@@ -250,8 +252,9 @@ class _CementDustSpreadScreenState extends State<CementDustSpreadScreen>
     rainRecoveryTime = (humidity > 90) ? "Calculating..." : "45 mins";
     drySurfaceRisk = (humidity < 40 && sunlight > 5000 && windSpeed > 4) ? "High Dust Lift Risk" : "Stable Conditions";
 
-    if (memsCurrent > 60 && windSpeed > 5) activityWindMatrix = "Dangerous: Activity + Dispersion";
-    else if (memsCurrent > 60) activityWindMatrix = "Localized Activity Spikes";
+    if (memsCurrent > 60 && windSpeed > 5) {
+      activityWindMatrix = "Dangerous: Activity + Dispersion";
+    } else if (memsCurrent > 60) activityWindMatrix = "Localized Activity Spikes";
     else if (windSpeed > 5) activityWindMatrix = "Wind-Driven Resuspension";
     else activityWindMatrix = "Safe Operating Zone";
 

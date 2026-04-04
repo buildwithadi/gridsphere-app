@@ -84,7 +84,7 @@ class _SoilScreenState extends State<SoilScreen>
   }
 
   Future<void> _fetchForecastData() async {
-    final apiKey = "371b716c25a9e70d9b96b6dc52443a7a";
+    const apiKey = "371b716c25a9e70d9b96b6dc52443a7a";
     final url = Uri.parse(
         "https://api.openweathermap.org/data/2.5/forecast?lat=$_currentLatitude&lon=$_currentLongitude&cnt=8&appid=$apiKey&units=metric");
 
@@ -118,9 +118,9 @@ class _SoilScreenState extends State<SoilScreen>
           bool canSpray = !isRaining && !tooWindy && (temp < 28);
 
           String reason = "";
-          if (isRaining)
+          if (isRaining) {
             reason = "Rain";
-          else if (tooWindy)
+          } else if (tooWindy)
             reason = "Windy";
           else if (temp >= 28) reason = "Too Hot";
 
@@ -156,8 +156,9 @@ class _SoilScreenState extends State<SoilScreen>
     int hour = now.hour;
     int nextHour = (hour ~/ 3 + 1) * 3;
     DateTime startTime = DateTime(now.year, now.month, now.day, nextHour, 0);
-    if (startTime.isBefore(now))
+    if (startTime.isBefore(now)) {
       startTime = startTime.add(const Duration(hours: 3));
+    }
 
     List<Map<String, dynamic>> mockData = [];
     for (int i = 0; i < 8; i++) {

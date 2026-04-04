@@ -12,8 +12,9 @@ class SessionManager {
   // Internal constructor
   SessionManager._internal();
 
-  String _sessionCookie = "";
-  // New properties for location
+  String _accessToken = ""; // Updated from _sessionCookie
+
+  // Properties for location and user context
   double _latitude = 0.0;
   double _longitude = 0.0;
   String _role = "agriculture";
@@ -21,7 +22,7 @@ class SessionManager {
   String _deviceId = ""; // Store device ID to use for API calls
 
   // Getters
-  String get sessionCookie => _sessionCookie;
+  String get accessToken => _accessToken; // Updated
   double get latitude => _latitude;
   double get longitude => _longitude;
   String get role => _role;
@@ -29,8 +30,9 @@ class SessionManager {
   String get deviceId => _deviceId;
 
   // Setters
-  void setSessionCookie(String cookie) {
-    _sessionCookie = cookie;
+  void setAccessToken(String token) {
+    // Updated
+    _accessToken = token;
   }
 
   void setLocation(double lat, double lon) {
@@ -71,7 +73,7 @@ class SessionManager {
 
   // Clear session (e.g., on logout)
   void clearSession() {
-    _sessionCookie = "";
+    _accessToken = ""; // Updated
     _latitude = 0.0;
     _longitude = 0.0;
     _role = "agriculture";

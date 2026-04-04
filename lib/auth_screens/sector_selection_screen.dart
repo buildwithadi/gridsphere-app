@@ -230,7 +230,7 @@ class _SectorCardState extends State<SectorCard> {
               child: Icon(
                 widget.icon,
                 size: 34,
-                color: Color(0xFF166534),
+                color: const Color(0xFF166534),
               ),
             ),
             const SizedBox(height: 16),

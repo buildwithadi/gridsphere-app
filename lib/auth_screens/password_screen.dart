@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'onboarding_ui_screen.dart'; // Import Navigation Target
+// Import Navigation Target
 import 'sector_selection_screen.dart';
 
 class GoogleFonts {
