@@ -32,6 +32,14 @@ class GoogleFonts {
   }
 }
 
+// Data Model for Graph Points
+class GraphPoint {
+  final DateTime time;
+  final double value;
+
+  GraphPoint({required this.time, required this.value});
+}
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -44,15 +52,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<dynamic> _devices = [];
   String farmerName = "--";
   String lastOnline = "--";
-  String deviceStatus = "Offline";
+  String deviceStatus = "Online"; // Forced online
   String deviceLocation = "--";
-  bool isDeviceOffline = false;
+  bool isDeviceOffline = false; // Forced online
   Map<String, dynamic>? sensorData;
-  Map<String, List<double>> historyData = {};
+  Map<String, List<GraphPoint>> historyData = {};
   bool isLoading = true;
   Timer? _timer;
 
-  // Use the global URL from ApiConstants instead of a hardcoded string
+  // Use the global URL from ApiConstants
   final String _baseUrl = ApiConstants.baseUrl;
 
   // Coordinates used locally, also synched to SessionManager
@@ -88,16 +96,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await _fetchLiveData();
       await _fetchHistoryData();
     } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Connection failed. Showing Offline Data."),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
       _loadMockData();
     }
   }
@@ -110,13 +108,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       deviceLocation = location;
       isLoading = true;
       sensorData = null;
-      isDeviceOffline = false;
-      deviceStatus = "Checking...";
+      isDeviceOffline = false; // Forced online
+      deviceStatus = "Online"; // Forced online
       lastOnline = "--";
 
       // Update coordinates based on selected device from _devices list
       final device = _devices.firstWhere(
-        (d) => d['d_id'].toString() == deviceId,
+        (d) => (d['id']?.toString() ?? d['device_uid']?.toString()) == deviceId,
         orElse: () => <String, dynamic>{},
       );
       if (device.isNotEmpty) {
@@ -137,19 +135,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _loadMockData() {
     debugPrint("⚠️ Loading Mock Data (Fallback)");
     final random = Random();
+    final now = DateTime.now();
 
     final mockDevices = [
       {
-        'd_id': '1',
-        'farm_name': 'Field A (Apple)',
-        'location': 'Himachal Pradesh',
+        'id': '1',
+        'device_name': 'Field A (Apple)',
+        'location_name': 'Himachal Pradesh',
         'latitude': 31.1048,
         'longitude': 77.1734
       },
       {
-        'd_id': '2',
-        'farm_name': 'Field B (Cherry)',
-        'location': 'Kashmir Valley',
+        'id': '2',
+        'device_name': 'Field B (Cherry)',
+        'location_name': 'Kashmir Valley',
         'latitude': 34.0837,
         'longitude': 74.7973
       },
@@ -178,18 +177,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
           double.parse((55.0 + random.nextDouble() * 2).toStringAsFixed(1)),
     };
 
-    List<double> genList(double base, double range) {
-      return List.generate(
-          24, (index) => base + (random.nextDouble() * range - range / 2));
+    List<GraphPoint> genList(double base, double range,
+        {bool isLeaf = false, bool noNegative = false}) {
+      return List.generate(24, (index) {
+        double val;
+        if (isLeaf) {
+          val = random.nextBool() ? 1.0 : 0.0;
+        } else {
+          val = base + (random.nextDouble() * range - range / 2);
+          if (noNegative && val < 0) val = 0.0;
+        }
+        return GraphPoint(
+          time: now.subtract(Duration(hours: 23 - index)),
+          value: val,
+        );
+      });
     }
 
-    Map<String, List<double>> mockHistory = {
+    Map<String, List<GraphPoint>> mockHistory = {
       "air_temp": genList(24.0, 5.0),
       "humidity": genList(65.0, 10.0),
-      "leaf_wetness": List.generate(24, (_) => random.nextBool() ? 1.0 : 0.0),
+      "leaf_wetness": genList(0.0, 0.0, isLeaf: true),
       "soil_temp": genList(20.0, 2.0),
       "soil_moisture": genList(30.0, 5.0),
-      "rainfall": genList(0.5, 1.0).map((e) => e < 0 ? 0.0 : e).toList(),
+      "rainfall": genList(0.5, 1.0, noNegative: true),
       "light_intensity": genList(800.0, 200.0),
       "wind": genList(10.0, 5.0),
       "pressure": genList(1013.0, 5.0),
@@ -211,22 +222,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         isDeviceOffline = false;
 
         if (selectedDeviceId.isEmpty) {
-          selectedDeviceId = mockDevices[0]['d_id'].toString();
-          deviceLocation = mockDevices[0]['farm_name'].toString();
+          selectedDeviceId = mockDevices[0]['id'].toString();
+          deviceLocation = mockDevices[0]['location_name'].toString();
           _currentLatitude = (mockDevices[0]['latitude'] as num).toDouble();
           _currentLongitude = (mockDevices[0]['longitude'] as num).toDouble();
 
-          // Set SessionManager location even for mock data
           SessionManager().setLocation(_currentLatitude, _currentLongitude);
         }
       });
     }
   }
 
+  // Using /devices/ route and new JSON keys (id, device_name, location_name)
   Future<void> _fetchDevices() async {
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/getDevices'),
+        Uri.parse('$_baseUrl/devices/'),
         headers: {
           'Authorization': 'Bearer ${SessionManager().accessToken}',
           'User-Agent': 'FlutterApp',
@@ -252,9 +263,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           setState(() {
             _devices = deviceList;
             var device = deviceList[0];
-            selectedDeviceId = device['d_id'].toString();
-            deviceLocation = device['address']?.toString() ?? "Field A";
-            farmerName = device["farm_name"]?.toString() ?? "Farmer";
+
+            selectedDeviceId = device['id']?.toString() ??
+                device['device_uid']?.toString() ??
+                "";
+            deviceLocation = device['location_name']?.toString() ?? "Field A";
+            farmerName = device["device_name"]?.toString() ?? "Farmer";
 
             // Set initial coordinates
             _currentLatitude =
@@ -273,12 +287,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // Using /devices/{id}/live-data and updated JSON keys (recorded_at, rain, light, leaf)
   Future<void> _fetchLiveData() async {
     if (selectedDeviceId.isEmpty || selectedDeviceId.contains("Demo")) return;
 
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/live-data/$selectedDeviceId'),
+        Uri.parse('$_baseUrl/devices/$selectedDeviceId/live-data'),
         headers: {
           'Authorization': 'Bearer ${SessionManager().accessToken}',
           'User-Agent': 'FlutterApp',
@@ -300,55 +315,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           if (mounted) {
             setState(() {
-              String timeStr = reading['timestamp']?.toString() ?? "";
-              lastOnline = timeStr;
+              String timeStr = reading['recorded_at']?.toString() ?? "";
+              lastOnline = timeStr.isNotEmpty ? timeStr : lastOnline;
 
-              bool isOffline = false;
-              if (timeStr.isNotEmpty) {
-                try {
-                  DateTime readingTime =
-                      DateTime.parse(timeStr.replaceAll(' ', 'T'));
-                  Duration diff = DateTime.now().difference(readingTime);
-                  if (diff.inMinutes > 90) {
-                    isOffline = true;
-                  }
-                } catch (e) {
-                  debugPrint("Date Parse Error: $e");
-                }
+              // Forced always online regardless of time difference
+              isDeviceOffline = false;
+              deviceStatus = "Online";
+
+              // Map Leaf wetness 1/0 or true/false to Wet/Dry
+              String parsedLeafWetness = "Dry";
+              String rawLeaf = reading['leaf']?.toString().toLowerCase() ?? "0";
+              if (rawLeaf == "1" || rawLeaf == "wet" || rawLeaf == "true") {
+                parsedLeafWetness = "Wet";
               }
 
-              isDeviceOffline = isOffline;
-              deviceStatus = isOffline ? "Offline" : "Online";
-
               sensorData = {
-                "air_temp": double.tryParse(reading['temp'].toString()) ?? 0.0,
+                "air_temp":
+                    double.tryParse(reading['temp']?.toString() ?? "") ?? 0.0,
                 "humidity":
-                    double.tryParse(reading['humidity'].toString()) ?? 0.0,
-                "leaf_wetness": reading['leafwetness']?.toString() ?? "Dry",
+                    double.tryParse(reading['humidity']?.toString() ?? "") ??
+                        0.0,
+                "leaf_wetness": parsedLeafWetness,
                 "soil_temp":
-                    double.tryParse(reading['depth_temp'].toString()) ?? 0.0,
-                "soil_moisture":
-                    double.tryParse(reading['surface_humidity'].toString()) ??
+                    double.tryParse(reading['depth_temp']?.toString() ?? "") ??
                         0.0,
+                "soil_moisture": double.tryParse(
+                        reading['surface_humidity']?.toString() ?? "") ??
+                    0.0,
                 "rainfall":
-                    double.tryParse(reading['rainfall'].toString()) ?? 0.0,
+                    double.tryParse(reading['rain']?.toString() ?? "") ?? 0.0,
                 "light_intensity":
-                    double.tryParse(reading['light_intensity'].toString()) ??
-                        0.0,
+                    double.tryParse(reading['light']?.toString() ?? "") ?? 0.0,
                 "wind":
-                    double.tryParse(reading['wind_speed'].toString()) ?? 0.0,
+                    double.tryParse(reading['wind_speed']?.toString() ?? "") ??
+                        0.0,
                 "pressure":
-                    double.tryParse(reading['pressure'].toString()) ?? 0.0,
+                    double.tryParse(reading['pressure']?.toString() ?? "") ??
+                        0.0,
                 "depth_temp":
-                    double.tryParse(reading['depth_temp'].toString()) ?? 0.0,
-                "depth_humidity":
-                    double.tryParse(reading['depth_humidity'].toString()) ??
+                    double.tryParse(reading['depth_temp']?.toString() ?? "") ??
                         0.0,
-                "surface_temp":
-                    double.tryParse(reading['surface_temp'].toString()) ?? 0.0,
-                "surface_humidity":
-                    double.tryParse(reading['surface_humidity'].toString()) ??
-                        0.0,
+                "depth_humidity": double.tryParse(
+                        reading['depth_humidity']?.toString() ?? "") ??
+                    0.0,
+                "surface_temp": double.tryParse(
+                        reading['surface_temp']?.toString() ?? "") ??
+                    0.0,
+                "surface_humidity": double.tryParse(
+                        reading['surface_humidity']?.toString() ?? "") ??
+                    0.0,
               };
               isLoading = false;
             });
@@ -356,8 +371,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         } else {
           if (mounted) {
             setState(() {
-              deviceStatus = "Offline / No Data";
-              isDeviceOffline = true;
+              deviceStatus = "Online"; // Forced online
+              isDeviceOffline = false;
               isLoading = false;
             });
           }
@@ -369,12 +384,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // UPDATED: Plotting the graph using the /devices/{device_id}/history/flattened route
+  // and chronological mapping similar to Generic Detail Screen.
   Future<void> _fetchHistoryData() async {
     if (selectedDeviceId.isEmpty || selectedDeviceId.contains("Demo")) return;
 
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/devices/$selectedDeviceId/history?range=daily'),
+        Uri.parse(
+            '$_baseUrl/devices/$selectedDeviceId/history/flattened?range=daily'),
         headers: {
           'Authorization': 'Bearer ${SessionManager().accessToken}',
           'User-Agent': 'FlutterApp',
@@ -385,44 +403,75 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
         List<dynamic> readings = [];
-        if (jsonResponse is List) {
-          readings = jsonResponse;
-        } else if (jsonResponse is Map && jsonResponse.containsKey('data')) {
+
+        if (jsonResponse is Map && jsonResponse.containsKey('data')) {
           readings = jsonResponse['data'];
+        } else if (jsonResponse is List) {
+          readings = jsonResponse;
         }
 
         if (readings.isNotEmpty) {
-          List<double> extractList(String key) {
-            return readings.map<double>((r) {
-              return double.tryParse(r[key].toString()) ?? 0.0;
-            }).toList();
+          List<GraphPoint> extractPoints(String key, {bool isLeaf = false}) {
+            List<GraphPoint> points = [];
+            for (var r in readings) {
+              var rawVal = r[key];
+
+              if (isLeaf) {
+                String leafStr = rawVal?.toString().toLowerCase() ?? '0';
+                if (leafStr == '1' || leafStr == 'wet' || leafStr == 'true') {
+                  rawVal = 1.0;
+                } else {
+                  rawVal = 0.0;
+                }
+              }
+
+              if (rawVal == null) continue;
+
+              double val = double.tryParse(rawVal.toString()) ?? 0.0;
+
+              // Extract the timestamp
+              String timeStr = r['recorded_at']?.toString() ??
+                  r['timestamp']?.toString() ??
+                  '';
+              DateTime time;
+
+              if (timeStr.isNotEmpty) {
+                try {
+                  time = DateTime.parse(timeStr.replaceAll(' ', 'T'));
+                } catch (e) {
+                  time = DateTime.now();
+                }
+              } else {
+                time = DateTime.now();
+              }
+
+              points.add(GraphPoint(time: time, value: val));
+            }
+
+            // Ensure points are sorted chronologically
+            points.sort((a, b) => a.time.compareTo(b.time));
+            return points;
           }
 
-          Map<String, List<double>> newHistory = {};
-          newHistory['air_temp'] = extractList('temp');
-          newHistory['humidity'] = extractList('humidity');
-          newHistory['leaf_wetness'] = extractList('leafwetness');
-          newHistory['soil_temp'] = extractList('depth_temp');
-          newHistory['soil_moisture'] = extractList('surface_humidity');
-          newHistory['rainfall'] = extractList('rainfall');
-          newHistory['light_intensity'] = extractList('light_intensity');
-          newHistory['wind'] = extractList('wind_speed');
-          newHistory['pressure'] = extractList('pressure');
-          newHistory['depth_temp'] = extractList('depth_temp');
-          newHistory['depth_humidity'] = extractList('depth_humidity');
-          newHistory['surface_temp'] = extractList('surface_temp');
-          newHistory['surface_humidity'] = extractList('surface_humidity');
+          Map<String, List<GraphPoint>> newHistory = {};
+          newHistory['air_temp'] = extractPoints('temp');
+          newHistory['humidity'] = extractPoints('humidity');
+          newHistory['leaf_wetness'] = extractPoints('leaf', isLeaf: true);
+          newHistory['soil_temp'] = extractPoints('depth_temp');
+          newHistory['soil_moisture'] = extractPoints('surface_humidity');
+          newHistory['rainfall'] = extractPoints('rain');
+          newHistory['light_intensity'] = extractPoints('light');
+          newHistory['wind'] = extractPoints('wind_speed');
+          newHistory['pressure'] = extractPoints('pressure');
+          newHistory['depth_temp'] = extractPoints('depth_temp');
+          newHistory['depth_humidity'] = extractPoints('depth_humidity');
+          newHistory['surface_temp'] = extractPoints('surface_temp');
+          newHistory['surface_humidity'] = extractPoints('surface_humidity');
 
-          if (newHistory['air_temp']!.isNotEmpty) {
-            newHistory.forEach((key, list) {
-              newHistory[key] = list.reversed.toList();
+          if (mounted) {
+            setState(() {
+              historyData = newHistory;
             });
-
-            if (mounted) {
-              setState(() {
-                historyData = newHistory;
-              });
-            }
           }
         }
       }
@@ -480,7 +529,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 24),
-                              if (isDeviceOffline) _buildOfflineWarning(),
                               _buildFieldInfoBox(),
                               const SizedBox(height: 24),
                               Text(
@@ -502,48 +550,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildOfflineWarning() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.red.shade200),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.warning_amber_rounded,
-              color: Colors.red.shade700, size: 30),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Device Offline",
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red.shade800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Data is stale. Please contact the G Sense service team.",
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: Colors.red.shade700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -709,10 +715,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   if (_devices.isNotEmpty)
                     PopupMenuButton<String>(
                       onSelected: (String id) {
-                        final device = _devices
-                            .firstWhere((d) => d['d_id'].toString() == id);
-                        String loc = device['address']?.toString() ??
-                            device['farm_name']?.toString() ??
+                        final device = _devices.firstWhere((d) =>
+                            (d['id']?.toString() ??
+                                d['device_uid']?.toString()) ==
+                            id);
+                        String loc = device['location_name']?.toString() ??
+                            device['device_name']?.toString() ??
                             "Field $id";
                         _switchDevice(id, loc);
                       },
@@ -721,10 +729,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           borderRadius: BorderRadius.circular(12)),
                       itemBuilder: (BuildContext context) {
                         return _devices.map((device) {
+                          String currentId = device['id']?.toString() ??
+                              device['device_uid']?.toString() ??
+                              "";
                           return PopupMenuItem<String>(
-                            value: device['d_id'].toString(),
+                            value: currentId,
                             child: Text(
-                              "Device ID: ${device['d_id']}",
+                              "${device['device_name']}",
                               style: GoogleFonts.inter(color: Colors.black87),
                             ),
                           );
@@ -735,7 +746,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         children: [
                           Flexible(
                             child: Text(
-                              "Device ID: $selectedDeviceId",
+                              "Device: $farmerName",
                               style: GoogleFonts.inter(
                                   color: Colors.white70, fontSize: 13),
                               overflow: TextOverflow.ellipsis,
@@ -762,8 +773,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => ProfileScreen(
-                      // We pass the accessToken. You may need to rename this parameter
-                      // in ProfileScreen.dart to 'token' depending on how you update it.
                       sessionCookie: SessionManager().accessToken),
                 ),
               ).then((_) {
@@ -860,7 +869,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MaterialPageRoute(
                     builder: (context) => GenericDetailScreen(
                           title: "Light Intensity",
-                          sensorKey: "light_intensity",
+                          sensorKey: "light",
                           unit: " lx",
                           icon: LucideIcons.sun,
                           themeColor: const Color(0xFFFBC02D),
@@ -930,7 +939,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MaterialPageRoute(
                     builder: (context) => GenericDetailScreen(
                           title: "Leaf Wetness",
-                          sensorKey: "leafwetness",
+                          sensorKey: "leaf",
                           unit: "",
                           icon: LucideIcons.leaf,
                           themeColor: const Color(0xFF15803D),
@@ -954,7 +963,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MaterialPageRoute(
                     builder: (context) => GenericDetailScreen(
                           title: "Rainfall",
-                          sensorKey: "rainfall",
+                          sensorKey: "rain",
                           unit: " mm",
                           icon: LucideIcons.cloudRain,
                           themeColor: const Color(0xFF0EA5E9),
@@ -1200,7 +1209,7 @@ class _ConditionCard extends StatelessWidget {
 
 class _MiniLineChart extends StatelessWidget {
   final Color color;
-  final List<double> dataPoints;
+  final List<GraphPoint> dataPoints;
   const _MiniLineChart({required this.color, required this.dataPoints});
 
   @override
@@ -1217,7 +1226,7 @@ class _MiniLineChart extends StatelessWidget {
 
 class _ChartPainter extends CustomPainter {
   final Color color;
-  final List<double> dataPoints;
+  final List<GraphPoint> dataPoints;
   _ChartPainter(this.color, this.dataPoints);
 
   @override
@@ -1237,21 +1246,35 @@ class _ChartPainter extends CustomPainter {
       path.quadraticBezierTo(
           size.width * 0.75, size.height * 0.8, size.width, size.height * 0.2);
     } else {
-      double minVal = dataPoints.reduce(min);
-      double maxVal = dataPoints.reduce(max);
+      double minVal = dataPoints.map((e) => e.value).reduce(min);
+      double maxVal = dataPoints.map((e) => e.value).reduce(max);
       double range = maxVal - minVal;
       if (range == 0) range = 1;
 
-      double stepX = size.width / (dataPoints.length - 1);
+      final firstTime = dataPoints.first.time;
+      final totalDuration =
+          dataPoints.last.time.difference(firstTime).inMinutes.toDouble();
 
       for (int i = 0; i < dataPoints.length; i++) {
-        double normalizedY = 1.0 - ((dataPoints[i] - minVal) / range);
+        final point = dataPoints[i];
+
+        // Ensure chronological spacing on the X axis depending on accurate timestamps
+        double timeDiff = point.time.difference(firstTime).inMinutes.toDouble();
+        double x = 0.0;
+        if (totalDuration > 0) {
+          x = (timeDiff / totalDuration) * size.width;
+        } else {
+          x = size.width /
+              2; // Render in the middle if there is only one data point
+        }
+
+        double normalizedY = 1.0 - ((point.value - minVal) / range);
         double y = size.height * (0.1 + (normalizedY * 0.8));
 
         if (i == 0) {
-          path.moveTo(0, y);
+          path.moveTo(x, y);
         } else {
-          path.lineTo(i * stepX, y);
+          path.lineTo(x, y);
         }
       }
     }

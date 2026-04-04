@@ -177,15 +177,6 @@ class _SplashScreenState extends State<SplashScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white24, width: 2)),
-              ),
-              const SizedBox(height: 30),
-
               // --- Title with Bruno Ace SC ---
               Text(
                 "G Sense",

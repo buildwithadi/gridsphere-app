@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math';
@@ -65,10 +64,84 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
   bool _isLoading = true;
   String _errorMessage = '';
 
+  // Dynamic metadata from the API
+  String? _apiUnit;
+  String? _apiTitle;
+
   @override
   void initState() {
     super.initState();
+    // Fetch sensor types metadata and then fetch history data
+    _fetchSensorMetadata();
+    // Default to the daily (past 24h) range when opened
     _fetchHistoryData('24h');
+  }
+
+  Future<void> _fetchSensorMetadata() async {
+    try {
+      final url = Uri.parse("${ApiConstants.baseUrl}/sensors/types");
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer ${SessionManager().accessToken}',
+          'User-Agent': 'FlutterApp',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        final jsonResponse = jsonDecode(response.body);
+        if (jsonResponse['status'] == 'success' &&
+            jsonResponse['data'] is List) {
+          final List<dynamic> types = jsonResponse['data'];
+
+          for (var type in types) {
+            String code = type['code']?.toString() ?? '';
+
+            // Match the sensor code with the current sensorKey or its common fallbacks
+            if (code == widget.sensorKey ||
+                (widget.sensorKey == 'air_temp' && code == 'temp') ||
+                (widget.sensorKey == 'soil_moisture' &&
+                    code == 'surface_humidity') ||
+                (widget.sensorKey == 'soil_temp' && code == 'depth_temp') ||
+                (widget.sensorKey == 'wind_speed' && code == 'wind') ||
+                (widget.sensorKey == 'wind' && code == 'wind_speed') ||
+                (widget.sensorKey == 'rainfall' && code == 'rain') ||
+                (widget.sensorKey == 'light_intensity' && code == 'light') ||
+                (widget.sensorKey == 'leafwetness' && code == 'leaf') ||
+                (widget.sensorKey == 'leaf' && code == 'leafwetness')) {
+              if (mounted) {
+                setState(() {
+                  // Format the unit appropriately from the API
+                  String rawUnit = type['unit']?.toString() ?? '';
+                  if (rawUnit.toLowerCase() == 'c') {
+                    _apiUnit = '°C';
+                  } else if (rawUnit == '%') {
+                    _apiUnit = '%';
+                  } else if (rawUnit.isNotEmpty) {
+                    _apiUnit = ' $rawUnit';
+                  }
+
+                  // Title case the name from the API (e.g., 'temp' -> 'Temp')
+                  String rawName = type['name']?.toString() ?? '';
+                  if (rawName.isNotEmpty) {
+                    _apiTitle = rawName
+                        .split('_')
+                        .map((word) => word.isNotEmpty
+                            ? '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}'
+                            : '')
+                        .join(' ');
+                  }
+                });
+              }
+              break;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching sensor metadata: $e");
+    }
   }
 
   Future<void> _fetchHistoryData(String range) async {
@@ -80,20 +153,20 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
       _errorMessage = '';
     });
 
+    // Map the UI tab range to the API required parameter
     String apiRange = 'daily';
     if (range == '7d') apiRange = 'weekly';
     if (range == '30d') apiRange = 'monthly';
 
-    // Using ApiConstants for the base URL instead of hardcoded string
+    // Using ApiConstants for the base URL and the updated flattened history route
     final url = Uri.parse(
-        "${ApiConstants.baseUrl}/devices/${widget.deviceId}/history?range=$apiRange");
+        "${ApiConstants.baseUrl}/devices/${widget.deviceId}/history/flattened?range=$apiRange");
 
     try {
       final response = await http.get(
         url,
         headers: {
-          'Authorization':
-              'Bearer ${SessionManager().accessToken}', // Updated to use JWT access token
+          'Authorization': 'Bearer ${SessionManager().accessToken}',
           'User-Agent': 'FlutterApp',
           'Accept': 'application/json',
         },
@@ -105,10 +178,11 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
         final jsonResponse = jsonDecode(response.body);
         List<dynamic> readings = [];
 
-        if (jsonResponse is List) {
-          readings = jsonResponse;
-        } else if (jsonResponse is Map && jsonResponse.containsKey('data')) {
+        // Check if the response matches {"status": true, "data": [...]}
+        if (jsonResponse is Map && jsonResponse.containsKey('data')) {
           readings = jsonResponse['data'];
+        } else if (jsonResponse is List) {
+          readings = jsonResponse;
         }
 
         if (readings.isNotEmpty) {
@@ -117,26 +191,49 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
           for (var r in readings) {
             var rawVal = r[widget.sensorKey];
 
-            // Handle different key names in history API if they differ from sensorKey
+            // Handle fallback key names if the specific sensorKey isn't present in the flattened data
             if (rawVal == null) {
               if (widget.sensorKey == 'air_temp') {
                 rawVal = r['temp'];
-              } else if (widget.sensorKey == 'soil_moisture')
+              } else if (widget.sensorKey == 'soil_moisture') {
                 rawVal = r['surface_humidity'];
-              else if (widget.sensorKey == 'soil_temp')
+              } else if (widget.sensorKey == 'soil_temp') {
                 rawVal = r['depth_temp'];
-              else if (widget.sensorKey == 'wind')
+              } else if (widget.sensorKey == 'wind' ||
+                  widget.sensorKey == 'wind_speed') {
                 rawVal = r['wind_speed'];
-              else if (widget.sensorKey == 'wind_speed')
-                rawVal = r['wind_speed']; // Safety for wind_speed key
+              } else if (widget.sensorKey == 'light_intensity') {
+                rawVal = r['light'];
+              } else if (widget.sensorKey == 'rainfall') {
+                rawVal = r['rain'];
+              }
             }
+
+            // Convert Leaf wetness 1/0 or Wet/Dry strictly to 1.0 or 0.0 for graphing
+            if (widget.sensorKey == 'leaf' ||
+                widget.sensorKey == 'leafwetness') {
+              String leafStr = rawVal?.toString().toLowerCase() ?? '0';
+              if (leafStr == '1' || leafStr == 'wet' || leafStr == 'true') {
+                rawVal = 1.0;
+              } else {
+                rawVal = 0.0;
+              }
+            }
+
+            // Skip null points to prevent graphing errors
+            if (rawVal == null) continue;
 
             double val = double.tryParse(rawVal.toString()) ?? 0.0;
 
+            // Extract the timestamp
+            String timeStr = r['recorded_at']?.toString() ??
+                r['timestamp']?.toString() ??
+                '';
             DateTime time;
-            if (r['timestamp'] != null) {
+
+            if (timeStr.isNotEmpty) {
               try {
-                time = DateTime.parse(r['timestamp'].toString());
+                time = DateTime.parse(timeStr.replaceAll(' ', 'T'));
               } catch (e) {
                 time = DateTime.now();
               }
@@ -147,11 +244,18 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
             points.add(GraphPoint(time: time, value: val));
           }
 
+          // Ensure points are sorted chronologically for correct graph drawing
           points.sort((a, b) => a.time.compareTo(b.time));
 
           setState(() {
-            _graphData = points;
-            _isLoading = false;
+            if (points.isNotEmpty) {
+              _graphData = points;
+              _isLoading = false;
+            } else {
+              _graphData = [];
+              _isLoading = false;
+              _errorMessage = "No matching sensor data found for this period.";
+            }
           });
         } else {
           setState(() {
@@ -164,7 +268,7 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
         _generateMockData(range);
       }
     } catch (e) {
-      debugPrint("Error fetching history: $e");
+      debugPrint("Error fetching flattened history: $e");
       _generateMockData(range);
     }
   }
@@ -213,11 +317,13 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
     String minTime = "--";
 
     if (_graphData.isNotEmpty) {
+      // Find the maximum value and its timestamp
       final maxPoint = _graphData
           .reduce((curr, next) => curr.value > next.value ? curr : next);
       maxVal = maxPoint.value;
       maxTime = DateFormat('dd/MM hh:mm a').format(maxPoint.time);
 
+      // Find the minimum value and its timestamp
       final minPoint = _graphData
           .reduce((curr, next) => curr.value < next.value ? curr : next);
       minVal = minPoint.value;
@@ -227,17 +333,19 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
       minVal = currentVal;
     }
 
-    // --- UPDATED: Use HomePopScope Wrapper ---
+    // Apply API driven title & unit overrides if available
+    String displayTitle = _apiTitle ?? widget.title;
+    String displayUnit = _apiUnit ?? widget.unit;
+
     return HomePopScope(
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
-          // Passing explicitly black87 color so it's visible on the white AppBar
           leading: const HomeBackButton(color: Colors.black87),
           title: Text(
-            widget.title,
+            displayTitle,
             style: GoogleFonts.inter(
               color: Colors.black87,
               fontWeight: FontWeight.bold,
@@ -271,8 +379,7 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
                   Expanded(
                     child: _buildStatBox(
                       "Max",
-                      // Updated to 2 decimal places
-                      "${maxVal.toStringAsFixed(2)}${widget.unit}",
+                      "${maxVal.toStringAsFixed(2)}$displayUnit",
                       Icons.arrow_upward,
                       Colors.red,
                       maxTime,
@@ -282,8 +389,7 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
                   Expanded(
                     child: _buildStatBox(
                       "Min",
-                      // Updated to 2 decimal places
-                      "${minVal.toStringAsFixed(2)}${widget.unit}",
+                      "${minVal.toStringAsFixed(2)}$displayUnit",
                       Icons.arrow_downward,
                       Colors.blue,
                       minTime,
@@ -322,7 +428,7 @@ class _GenericDetailScreenState extends State<GenericDetailScreen> {
                         ),
                         const SizedBox(width: 10),
                         Text(
-                          "${widget.title} Trend",
+                          "$displayTitle Trend",
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -543,7 +649,6 @@ class _DetailedChartPainter extends CustomPainter {
       double value = minVal + (yRange * i / 4);
       double yPos = chartHeight - (chartHeight * i / 4);
 
-      // Updated to 2 decimal places for consistent axis labels
       final textSpan =
           TextSpan(text: value.toStringAsFixed(2), style: textStyle);
       final textPainter =

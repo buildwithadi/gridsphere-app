@@ -105,8 +105,9 @@ class _ProtectionScreenState extends State<ProtectionScreen>
     }
 
     try {
+      // Updated to match the newer /devices/{id}/live-data structure
       final response = await http.get(
-        Uri.parse('$_baseUrl/live-data/$targetDeviceId'),
+        Uri.parse('$_baseUrl/devices/$targetDeviceId/live-data'),
         headers: {
           'Authorization': 'Bearer $token',
           'User-Agent': 'FlutterApp',
@@ -117,19 +118,26 @@ class _ProtectionScreenState extends State<ProtectionScreen>
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
         List<dynamic> readings = [];
+
         if (jsonResponse is List) {
           readings = jsonResponse;
-        } else if (jsonResponse['data'] is List)
+        } else if (jsonResponse is Map && jsonResponse.containsKey('data')) {
           readings = jsonResponse['data'];
+        }
 
         if (readings.isNotEmpty) {
           final reading = readings[0];
-          double temp = double.tryParse(reading['temp'].toString()) ?? 0.0;
+          double temp =
+              double.tryParse(reading['temp']?.toString() ?? "") ?? 0.0;
           double humidity =
-              double.tryParse(reading['humidity'].toString()) ?? 0.0;
+              double.tryParse(reading['humidity']?.toString() ?? "") ?? 0.0;
+
           double wetnessHours =
               await _calculateWetnessDuration(targetDeviceId, token);
-          _calculateRisks(temp, wetnessHours, humidity);
+
+          if (mounted) {
+            _calculateRisks(temp, wetnessHours, humidity);
+          }
         } else {
           _generateMockData();
         }
@@ -142,28 +150,38 @@ class _ProtectionScreenState extends State<ProtectionScreen>
     }
   }
 
+  // Updated to use the new flattened history endpoint
   Future<double> _calculateWetnessDuration(String id, String token) async {
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/devices/$id/history?range=daily'),
+        Uri.parse('$_baseUrl/devices/$id/history/flattened?range=daily'),
         headers: {
           'Authorization': 'Bearer $token',
           'User-Agent': 'FlutterApp',
+          'Accept': 'application/json',
         },
       );
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
         List<dynamic> list = [];
-        if (jsonResponse is List) {
+
+        if (jsonResponse is Map && jsonResponse.containsKey('data')) {
+          list = jsonResponse['data'];
+        } else if (jsonResponse is List) {
           list = jsonResponse;
-        } else if (jsonResponse['data'] is List) list = jsonResponse['data'];
+        }
 
         int wetCount = 0;
         for (var r in list) {
-          String status = r['leafwetness']?.toString().toLowerCase() ?? "dry";
+          // Flattened API uses 'leaf' or 'leafwetness'
+          String status = r['leaf']?.toString().toLowerCase() ??
+              r['leafwetness']?.toString().toLowerCase() ??
+              "dry";
+
           if (status == "wet" ||
               status == "1" ||
+              status == "true" ||
               (double.tryParse(status) ?? 0) > 0) {
             wetCount++;
           }
@@ -171,24 +189,42 @@ class _ProtectionScreenState extends State<ProtectionScreen>
         return wetCount.toDouble();
       }
     } catch (e) {
+      debugPrint("Error calculating wetness duration: $e");
       return 0.0;
     }
     return 0.0;
   }
 
   String _tempDeviceId = "";
+  // Updated to match the newer /devices/ structure
   Future<void> _fetchDefaultDevice(String token) async {
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/getDevices'),
-        headers: {'Authorization': 'Bearer $token', 'User-Agent': 'FlutterApp'},
+        Uri.parse('$_baseUrl/devices/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'User-Agent': 'FlutterApp',
+          'Accept': 'application/json',
+        },
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data is List && data.isNotEmpty) {
-          _tempDeviceId = data[0]['d_id'].toString();
-        } else if (data['data'] is List && (data['data'] as List).isNotEmpty) {
-          _tempDeviceId = data['data'][0]['d_id'].toString();
+        List<dynamic> deviceList = [];
+
+        if (data is List) {
+          deviceList = data;
+        } else if (data is Map) {
+          if (data['data'] is List) {
+            deviceList = data['data'];
+          } else if (data['devices'] is List) {
+            deviceList = data['devices'];
+          }
+        }
+
+        if (deviceList.isNotEmpty) {
+          _tempDeviceId = deviceList[0]['id']?.toString() ??
+              deviceList[0]['device_uid']?.toString() ??
+              "";
         }
       }
     } catch (_) {}
@@ -263,7 +299,10 @@ class _ProtectionScreenState extends State<ProtectionScreen>
     double temp = 15.0 + random.nextDouble() * 15;
     double wetnessHours = random.nextDouble() * 24;
     double humidity = 50 + random.nextDouble() * 50;
-    _calculateRisks(temp, wetnessHours, humidity);
+
+    if (mounted) {
+      _calculateRisks(temp, wetnessHours, humidity);
+    }
   }
 
   Map<String, dynamic> _calculateAppleScab(double temp, double wetnessHours) {
@@ -381,8 +420,9 @@ class _ProtectionScreenState extends State<ProtectionScreen>
     Map<String, dynamic> risk = {'value': 10, 'status': "Low"};
     if (temp > 29 && humidity < 60) {
       risk = {'value': 95, 'status': "High"};
-    } else if (temp > 25 && humidity < 70)
+    } else if (temp > 25 && humidity < 70) {
       risk = {'value': 60, 'status': "Medium"};
+    }
     return risk;
   }
 

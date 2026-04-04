@@ -55,6 +55,8 @@ class SessionManager {
   // Save role to SharedPreferences
   static const String _roleKey = 'user_role';
   static const String _industryValKey = 'user_industry_val';
+  static const String _latKey = 'user_latitude';
+  static const String _lonKey = 'user_longitude';
 
   Future<void> saveRole(String role, {int industryValue = 1}) async {
     _role = role;
@@ -71,14 +73,34 @@ class SessionManager {
     _industryValue = prefs.getInt(_industryValKey) ?? 1;
   }
 
+  // Save location to SharedPreferences
+  Future<void> saveLocation(double lat, double lon) async {
+    _latitude = lat;
+    _longitude = lon;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_latKey, lat);
+    await prefs.setDouble(_lonKey, lon);
+  }
+
+  // Load location from SharedPreferences
+  Future<void> loadLocation() async {
+    final prefs = await SharedPreferences.getInstance();
+    _latitude = prefs.getDouble(_latKey) ?? 0.0;
+    _longitude = prefs.getDouble(_lonKey) ?? 0.0;
+  }
+
   // Clear session (e.g., on logout)
-  void clearSession() {
+  void clearSession() async {
     _accessToken = ""; // Updated
     _latitude = 0.0;
     _longitude = 0.0;
     _role = "agriculture";
     _industryValue = 1;
     _deviceId = "";
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_latKey);
+    await prefs.remove(_lonKey);
   }
 
   // --- Alert Settings Management ---

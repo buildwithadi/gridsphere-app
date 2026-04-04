@@ -10,6 +10,7 @@ import '../widgets/custom_bottom_nav_bar.dart';
 import '../session_manager/session_manager.dart';
 import 'chemical_process_stability_screen.dart';
 import '../widgets/home_back_button.dart';
+import 'package:gsense_app/api_constants.dart'; // Import global API constants
 
 class GoogleFonts {
   static TextStyle inter({
@@ -47,7 +48,9 @@ class _ChemicalDustSpreadScreenState extends State<ChemicalDustSpreadScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final int _selectedIndex = 1;
-  final String _baseUrl = "https://gridsphere.in/station/api";
+
+  // Use the global URL from ApiConstants instead of a hardcoded string
+  final String _baseUrl = ApiConstants.baseUrl;
 
   String overallRisk = "Low";
   double overallRiskValue = 0.0;
@@ -83,7 +86,8 @@ class _ChemicalDustSpreadScreenState extends State<ChemicalDustSpreadScreen>
       final response = await http.get(
         Uri.parse('$_baseUrl/live-data/${widget.deviceId}'),
         headers: {
-          'Cookie': SessionManager().sessionCookie,
+          'Authorization':
+              'Bearer ${SessionManager().accessToken}', // Updated to use JWT access token
           'User-Agent': 'FlutterApp',
           'Accept': 'application/json',
         },

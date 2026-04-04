@@ -54,6 +54,10 @@ class _SoilScreenState extends State<SoilScreen>
   List<Map<String, dynamic>> _sprayForecast = [];
   bool _isLoadingForecast = true;
 
+  // Static cache to prevent slow loading and changing values upon returning to the screen
+  static List<Map<String, dynamic>>? _cachedForecast;
+  static DateTime? _lastFetchTime;
+
   // Local state for coordinates
   double _currentLatitude = 0.0;
   double _currentLongitude = 0.0;
@@ -63,19 +67,34 @@ class _SoilScreenState extends State<SoilScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
 
+    // If we have cached data that is less than 60 minutes old, use it instantly
+    if (_cachedForecast != null &&
+        _lastFetchTime != null &&
+        DateTime.now().difference(_lastFetchTime!).inMinutes < 60) {
+      _sprayForecast = _cachedForecast!;
+      _isLoadingForecast = false;
+
+      // Still need to assign local coordinates so the bottom nav bar behaves correctly
+      _currentLatitude = SessionManager().latitude;
+      _currentLongitude = SessionManager().longitude;
+    } else {
+      _initializeLocationAndForecast();
+    }
+  }
+
+  Future<void> _initializeLocationAndForecast() async {
     // 1. Try to use coordinates passed in constructor
     if (widget.latitude != 0.0 && widget.longitude != 0.0) {
       _currentLatitude = widget.latitude;
       _currentLongitude = widget.longitude;
-    }
-    // 2. Fallback to SessionManager if constructor params are empty
-    else {
+    } else {
+      // 2. Fetch directly from SessionManager (populated globally via Splash Screen)
       _currentLatitude = SessionManager().latitude;
       _currentLongitude = SessionManager().longitude;
     }
 
     if (_currentLatitude != 0.0 && _currentLongitude != 0.0) {
-      _fetchForecastData();
+      await _fetchForecastData();
     } else {
       debugPrint(
           "⚠️ No valid coordinates found in SoilScreen. Showing mock data.");
@@ -120,9 +139,11 @@ class _SoilScreenState extends State<SoilScreen>
           String reason = "";
           if (isRaining) {
             reason = "Rain";
-          } else if (tooWindy)
+          } else if (tooWindy) {
             reason = "Windy";
-          else if (temp >= 28) reason = "Too Hot";
+          } else if (temp >= 28) {
+            reason = "Too Hot";
+          }
 
           forecast.add({
             "time": time,
@@ -140,6 +161,10 @@ class _SoilScreenState extends State<SoilScreen>
           setState(() {
             _sprayForecast = forecast;
             _isLoadingForecast = false;
+
+            // Save to global static cache
+            _cachedForecast = forecast;
+            _lastFetchTime = DateTime.now();
           });
         }
       } else {
@@ -151,7 +176,6 @@ class _SoilScreenState extends State<SoilScreen>
   }
 
   void _generateMockSprayData() {
-    final random = Random();
     DateTime now = DateTime.now();
     int hour = now.hour;
     int nextHour = (hour ~/ 3 + 1) * 3;
@@ -159,6 +183,9 @@ class _SoilScreenState extends State<SoilScreen>
     if (startTime.isBefore(now)) {
       startTime = startTime.add(const Duration(hours: 3));
     }
+
+    // Fixed seed so the random values don't bounce around every time you change screens
+    final random = Random(startTime.day + startTime.hour);
 
     List<Map<String, dynamic>> mockData = [];
     for (int i = 0; i < 8; i++) {
@@ -188,6 +215,10 @@ class _SoilScreenState extends State<SoilScreen>
       setState(() {
         _sprayForecast = mockData;
         _isLoadingForecast = false;
+
+        // Save to global static cache
+        _cachedForecast = mockData;
+        _lastFetchTime = DateTime.now();
       });
     }
   }
@@ -200,15 +231,13 @@ class _SoilScreenState extends State<SoilScreen>
 
   @override
   Widget build(BuildContext context) {
-    // --- UPDATED: Use HomePopScope Wrapper ---
     return HomePopScope(
       child: Scaffold(
         backgroundColor: const Color(0xFF166534),
         appBar: AppBar(
           backgroundColor: const Color(0xFF166534),
           elevation: 0,
-          leading:
-              const HomeBackButton(), // Also use HomeBackButton for UI back arrow
+          leading: const HomeBackButton(),
           title: Text(
             "Soil Health",
             style: GoogleFonts.inter(

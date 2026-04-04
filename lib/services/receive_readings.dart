@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart'; // Add intl package to pubspec.yaml for date formatting
 import '../session_manager/session_manager.dart';
+import 'package:gsense_app/api_constants.dart'; // Import global API constants
 
 // ---------------------------------------------------------------------------
 // 1. DATA MODEL (Matches ReadingModel.php lines 108-109)
@@ -32,7 +33,7 @@ class Reading {
   final double soilMoisture; // mapped from 'surface_humidity' usually
   final double depthTemp;
   final double depthHum;
-  final String leafWetness;  // converted from 0/1 to "Dry"/"Wet"
+  final String leafWetness; // converted from 0/1 to "Dry"/"Wet"
 
   Reading({
     required this.deviceId,
@@ -97,7 +98,8 @@ class Reading {
 // 2. SERVICE CLASS (Connects to Devices.php)
 // ---------------------------------------------------------------------------
 class ReadingsService {
-  final String _baseUrl = "https://gridsphere.in/station/api";
+  // Updated to use the global API constant
+  final String _baseUrl = ApiConstants.baseUrl;
 
   /// 1. Get LIVE DATA (Latest Reading)
   /// Backend: Devices.php -> liveData() [Line 34]
@@ -109,7 +111,9 @@ class ReadingsService {
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
-        if (json['status'] == true && json['data'] is List && json['data'].isNotEmpty) {
+        if (json['status'] == true &&
+            json['data'] is List &&
+            json['data'].isNotEmpty) {
           return Reading.fromJson(json['data'][0]);
         }
       }
@@ -133,8 +137,7 @@ class ReadingsService {
 
     // URL: /history/{id}?range=custom&from=...&to=...
     final url = Uri.parse(
-        '$_baseUrl/history/$deviceId?range=custom&from=$fromDate&to=$toDate'
-    );
+        '$_baseUrl/history/$deviceId?range=custom&from=$fromDate&to=$toDate');
 
     try {
       final response = await http.get(url, headers: _getHeaders());
@@ -157,10 +160,11 @@ class ReadingsService {
     return [];
   }
 
-  // Helper for headers (Cookie is critical for Auth)
+  // Helper for headers (Token is critical for Auth)
   Map<String, String> _getHeaders() {
     return {
-      'Cookie': SessionManager().sessionCookie, // Required by backend [Line 35 & 42]
+      'Authorization':
+          'Bearer ${SessionManager().accessToken}', // Updated to JWT
       'User-Agent': 'FlutterApp',
       'Accept': 'application/json',
     };
