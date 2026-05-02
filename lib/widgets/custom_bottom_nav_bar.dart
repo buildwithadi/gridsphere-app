@@ -7,7 +7,7 @@ import '../cement/cement_dust_spread_screen.dart';
 import '../cement/cement_emission_screen.dart';
 import '../chemical/chemical_dust_spread_screen.dart';
 import '../chemical/chemical_process_stability_screen.dart';
-import '../screens/alerts_screen.dart';
+import '../screens/device_map.dart'; // Imported the new Map Screen
 import '../session_manager/session_manager.dart';
 
 class GoogleFontsHelper {
@@ -56,7 +56,7 @@ class CustomBottomNavBar extends StatelessWidget {
           BottomNavigationBarItem(
               icon: Icon(LucideIcons.activity), label: "Compliance"),
           BottomNavigationBarItem(
-              icon: Icon(Icons.notifications_none), label: "Alerts"),
+              icon: Icon(LucideIcons.map), label: "Map"), // Updated to Map
         ];
       case 'chemical':
         return const [
@@ -67,7 +67,7 @@ class CustomBottomNavBar extends StatelessWidget {
           BottomNavigationBarItem(
               icon: Icon(LucideIcons.gauge), label: "Stability"),
           BottomNavigationBarItem(
-              icon: Icon(Icons.notifications_none), label: "Alerts"),
+              icon: Icon(LucideIcons.map), label: "Map"), // Updated to Map
         ];
       default:
         return const [
@@ -78,7 +78,7 @@ class CustomBottomNavBar extends StatelessWidget {
           BottomNavigationBarItem(
               icon: Icon(LucideIcons.layers), label: "Soil"),
           BottomNavigationBarItem(
-              icon: Icon(Icons.notifications_none), label: "Alerts"),
+              icon: Icon(LucideIcons.map), label: "Map"), // Updated to Map
         ];
     }
   }
@@ -154,14 +154,12 @@ class CustomBottomNavBar extends StatelessWidget {
           );
       }
     } else if (index == 4) {
+      // Navigates to the Device Map Screen instead of Alerts
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => AlertsScreen(
+          builder: (context) => DeviceMapScreen(
             deviceId: deviceId,
-            sensorData: sensorData,
-            latitude: latitude,
-            longitude: longitude,
           ),
         ),
       );

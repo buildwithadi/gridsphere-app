@@ -62,7 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
       {
         'from': 'ai',
         'text':
-            "Namaste! 剌 I'm your Kisan AI companion from G Sense. 言\n\nI'm here to help you keep a close eye on your farm. I have your real-time data for Device ${widget.deviceId} ready! \n\nHow is your field doing today? Would you like me to check the soil health or recent rainfall for you?"
+            "Namaste! I'm your Kisan AI companion from G Sense. \n\nI'm here to help you keep a close eye on your farm. I have your real-time data for Device ${widget.deviceId} ready! \n\nHow is your field doing today? Would you like me to check the soil health or recent rainfall for you?"
       }
     ];
   }
@@ -113,7 +113,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _messages.add({
             'from': 'ai',
             'text':
-                "I'm having a little trouble connecting to the field experts right now. Please try again in a moment! 囿"
+                "I'm having a little trouble connecting to the field experts right now. Please try again in a moment!"
           });
         });
       }
@@ -123,7 +123,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _messages.add({
             'from': 'ai',
             'text':
-                "It seems I've lost my connection to the sensors. Let me check my signal and try again soon! 藤"
+                "It seems I've lost my connection to the sensors. Let me check my signal and try again soon!"
           });
         });
       }
@@ -279,10 +279,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
-                  bottomLeft:
-                      isUser ? const Radius.circular(20) : const Radius.circular(4),
-                  bottomRight:
-                      isUser ? const Radius.circular(4) : const Radius.circular(20),
+                  bottomLeft: isUser
+                      ? const Radius.circular(20)
+                      : const Radius.circular(4),
+                  bottomRight: isUser
+                      ? const Radius.circular(4)
+                      : const Radius.circular(20),
                 ),
                 boxShadow: [
                   BoxShadow(
